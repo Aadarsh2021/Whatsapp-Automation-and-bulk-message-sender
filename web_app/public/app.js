@@ -575,6 +575,10 @@ function openHistoryDetailsModal(index) {
         </div>
     `;
 
+    document.getElementById('detailsModalCustomAction').innerHTML = '';
+    openModal('modalDetails');
+}
+
 // 1-Click Data Wipe & Unlink
 async function wipeMyDataFromModal() {
     if (!confirm('Are you sure you want to permanently wipe all scheduled tasks, delivery logs, and disconnect your WhatsApp from this device?')) return;
