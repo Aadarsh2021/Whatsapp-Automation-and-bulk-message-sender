@@ -15,19 +15,36 @@
         <!-- Top Navigation Bar -->
         <header class="top-nav">
             <div class="brand">
-                <div class="logo-icon">💬</div>
-                <div>
-                    <h1>AutoMate <span>Cloud</span></h1>
-                    <p class="tagline">24/7 WhatsApp Automation &amp; Cloud Scheduler</p>
+                <div class="brand-logo-mark">
+                    <svg viewBox="0 0 36 36" width="36" height="36" fill="none">
+                        <rect width="36" height="36" rx="10" fill="url(#brandGrad)"/>
+                        <path d="M18 7.5C12.2 7.5 7.5 12.2 7.5 18c0 2 .57 3.86 1.57 5.46L7.5 28.5l5.24-1.54A10.45 10.45 0 0 0 18 28.5c5.8 0 10.5-4.7 10.5-10.5S23.8 7.5 18 7.5z" fill="#ffffff" fill-opacity="0.96"/>
+                        <path d="M21.5 14.8l-4.2 5.5-2.6-2.4" stroke="#008069" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+                        <defs>
+                            <linearGradient id="brandGrad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#00a884"/>
+                                <stop offset="1" stop-color="#008069"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <div class="brand-title-row">
+                        <h1>AutoMate</h1>
+                        <span class="brand-edition-badge">Cloud Pro</span>
+                    </div>
+                    <p class="tagline">Enterprise WhatsApp Automation &amp; Cloud Scheduler</p>
                 </div>
             </div>
 
             <div class="nav-controls">
                 <button id="themeToggleBtn" class="theme-toggle-btn" onclick="toggleTheme()" title="Switch WhatsApp Dark / Light Theme">
-                    <span id="themeToggleIcon">☀️</span>
+                    <span id="themeToggleIcon">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                    </span>
                 </button>
                 <button id="feedbackNavBtn" class="feedback-nav-btn" onclick="openFeedbackModal()" title="Leave a Review or Feedback">
-                    <span class="btn-star">⭐</span>
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="#f7a831" stroke="#f7a831" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                     <span class="feedback-text">Reviews</span>
                 </button>
                 <!-- Google Sign-In Button (Logged Out state) -->
@@ -38,42 +55,76 @@
                         <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
                         <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
                     </svg>
-                    <span>Sign in with Google</span>
+                    <span>Sign in</span>
                 </button>
                 <!-- User Profile Pill (Logged In state) -->
                 <div id="userProfileBadge" class="user-profile-badge" style="display: none;" onclick="openProfileModal()" title="View Google Account Profile">
                     <img id="userAvatarImg" class="user-avatar-img" src="" alt="Avatar">
                     <div class="user-profile-info">
                         <span id="userDisplayName" class="user-display-name">User</span>
-                        <span class="user-security-tag">🛡️ Verified Account</span>
+                        <span class="user-security-tag">Verified 🛡️</span>
                     </div>
                 </div>
                 <div class="device-pill" onclick="openPrivacyModal()" title="Isolated Device Session (Click for Privacy Info)">
-                    <span class="device-dot"></span>
-                    <span class="device-name">🔒 Private Session</span>
-                    <span class="device-info-btn">ℹ️</span>
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span class="device-name">Private Session</span>
                 </div>
-                <div id="liveClock" class="clock-badge">🕒 00:00:00</div>
+                <div id="liveClock" class="clock-badge">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span id="clockText">00:00:00</span>
+                </div>
                 <div id="connectionStatusBadge" class="status-badge disconnected">
-                    <span class="status-dot"></span>
+                    <span class="status-radar-dot"></span>
                     <span id="statusText">Connecting...</span>
                 </div>
             </div>
         </header>
 
-        <!-- Navigation Tabs -->
+        <!-- Live System Health Ribbon -->
+        <div class="system-metrics-ribbon">
+            <div class="metric-cell">
+                <span class="metric-radar-dot"></span>
+                <span class="metric-title">Engine Node:</span>
+                <span id="metricNodeStatus" class="metric-value">Baileys Multi-Device (Active)</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric-cell">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span class="metric-title">Midnight Scheduler:</span>
+                <span class="metric-value text-accent">T-35s Pre-Warmer Armed</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric-cell">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                <span class="metric-title">Cloud Database:</span>
+                <span class="metric-value text-accent">Supabase PostgreSQL</span>
+            </div>
+            <div class="metric-divider"></div>
+            <div class="metric-cell">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span class="metric-title">Anti-Ban Filter:</span>
+                <span class="metric-value">Humanized Jitter Active</span>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs (Segmented Control) -->
         <nav class="tab-bar">
             <button id="tabBtnConnect" class="tab-btn active" onclick="switchTab('connect')">
-                <span class="tab-icon">📱</span> Link WhatsApp
+                <svg class="tab-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                <span>Link WhatsApp</span>
             </button>
             <button id="tabBtnCompose" class="tab-btn" onclick="switchTab('compose')">
-                <span class="tab-icon">🚀</span> Broadcast &amp; Schedule
+                <svg class="tab-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                <span>Broadcast &amp; Schedule</span>
             </button>
             <button id="tabBtnScheduled" class="tab-btn" onclick="switchTab('scheduled')">
-                <span class="tab-icon">📅</span> Scheduled Tasks <span id="scheduledCountBadge" class="pill-count">0</span>
+                <svg class="tab-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <span>Scheduled Tasks</span>
+                <span id="scheduledCountBadge" class="pill-count">0</span>
             </button>
             <button id="tabBtnHistory" class="tab-btn" onclick="switchTab('history')">
-                <span class="tab-icon">📊</span> Delivery History
+                <svg class="tab-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg>
+                <span>Delivery Logs</span>
             </button>
         </nav>
 
@@ -210,43 +261,58 @@
 
             <!-- SECTION 2: Compose & Schedule -->
             <section id="sectionCompose" class="content-section">
-                <div class="compose-grid">
+                <div class="compose-master-layout">
                     
                     <!-- Left: Contacts Column -->
-                    <div class="card glass-card">
+                    <div class="card glass-card compose-contacts-col">
                         <div class="card-header">
-                            <h3>👥 Target Contacts</h3>
+                            <div class="card-title-wrap">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                <h3>Target Contacts</h3>
+                            </div>
                             <span id="contactCountBadge" class="badge">0 Contacts</span>
                         </div>
-                        <p class="helper-text">Enter one phone number per line. (Auto +91 for 10-digit numbers).</p>
+                        <p class="helper-text">Enter one phone number per line. (10-digit numbers automatically formatted to +91).</p>
+
+                        <!-- Drag & Drop CSV / TXT Upload Zone -->
+                        <div id="dropZoneWrap" class="csv-dropzone" onclick="document.getElementById('contactsFileInput').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDropFile(event)">
+                            <svg class="drop-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            <span class="drop-text">Drag &amp; drop TXT/CSV or <strong class="text-accent">browse files</strong></span>
+                            <input type="file" id="contactsFileInput" accept=".txt,.csv" style="display:none;" onchange="handleFileUpload(event)">
+                        </div>
 
                         <textarea id="numbersInput" class="custom-textarea numbers-area" placeholder="919876543210&#10;919123456789&#10;+919811122233"></textarea>
 
                         <div class="action-btn-row">
-                            <label class="btn-file-upload">
-                                📁 Import TXT/CSV
-                                <input type="file" id="contactsFileInput" accept=".txt,.csv" style="display:none;" onchange="handleFileUpload(event)">
-                            </label>
-                            <button id="btnClearContacts" class="secondary-btn" onclick="clearContacts()">🗑️ Clear</button>
+                            <button type="button" class="secondary-btn btn-sm" onclick="addSampleTestNumber()">
+                                <span>➕ Add Test Number</span>
+                            </button>
+                            <button id="btnClearContacts" class="secondary-btn btn-sm" onclick="clearContacts()">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                <span>Clear</span>
+                            </button>
                         </div>
                     </div>
 
-                    <!-- Right: Message & Dispatch Mode -->
-                    <div class="card glass-card">
+                    <!-- Center: Message Editor & Mode -->
+                    <div class="card glass-card compose-editor-col">
                         <div class="card-header">
-                            <h3>✍️ Compose Message</h3>
-                            <button id="btnClearMessage" class="tiny-btn" onclick="clearMessage()">Clear Text</button>
+                            <div class="card-title-wrap">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                <h3>Compose Message</h3>
+                            </div>
+                            <button id="btnClearMessage" class="tiny-btn" onclick="clearMessage()">Clear Draft</button>
                         </div>
 
                         <!-- 1-Click Message Templates Library -->
                         <div class="templates-toolbar">
-                            <span class="templates-label">⚡ Templates:</span>
+                            <span class="templates-label">⚡ Quick Templates:</span>
                             <div class="template-chips-wrap">
-                                <button type="button" class="template-chip" onclick="insertTemplate('birthday')" title="Birthday Wish">🎂 Birthday</button>
-                                <button type="button" class="template-chip" onclick="insertTemplate('festival')" title="Festival Greetings">🪔 Festival</button>
-                                <button type="button" class="template-chip" onclick="insertTemplate('payment')" title="Payment Reminder">💳 Payment</button>
-                                <button type="button" class="template-chip" onclick="insertTemplate('announcement')" title="Important Notice">📢 Notice</button>
-                                <button type="button" class="template-chip" onclick="insertTemplate('meeting')" title="Meeting Reminder">💼 Meeting</button>
+                                <button type="button" class="template-chip" onclick="insertTemplate('birthday')">🎂 Birthday</button>
+                                <button type="button" class="template-chip" onclick="insertTemplate('festival')">🪔 Festival</button>
+                                <button type="button" class="template-chip" onclick="insertTemplate('payment')">💳 Payment Due</button>
+                                <button type="button" class="template-chip" onclick="insertTemplate('announcement')">📢 Announcement</button>
+                                <button type="button" class="template-chip" onclick="insertTemplate('meeting')">💼 Meeting</button>
                             </div>
                         </div>
 
@@ -262,7 +328,7 @@
                             <button type="button" onclick="insertEmoji('💐')">💐</button>
                         </div>
 
-                        <textarea id="messageInput" class="custom-textarea message-area" placeholder="Write your message here..."></textarea>
+                        <textarea id="messageInput" class="custom-textarea message-area" placeholder="Write your broadcast message here... (*bold*, _italic_, ~strike~ supported)"></textarea>
                         
                         <div class="char-counter">
                             <span id="charCount">0 characters</span> • <span id="wordCount">0 words</span>
@@ -270,33 +336,104 @@
 
                         <!-- Dispatch Mode Switcher -->
                         <div class="dispatch-mode-container">
-                            <label class="mode-label">Select Dispatch Mode:</label>
+                            <label class="mode-label">Dispatch Mode:</label>
                             <div class="mode-toggle-group">
                                 <label class="radio-pill">
                                     <input type="radio" name="dispatchMode" value="instant" checked onchange="toggleDispatchMode()">
-                                    <span>⚡ Send Instantly</span>
+                                    <span>
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                        Send Instantly
+                                    </span>
                                 </label>
                                 <label class="radio-pill">
                                     <input type="radio" name="dispatchMode" value="schedule" onchange="toggleDispatchMode()">
-                                    <span>⏰ 24/7 Cloud Schedule</span>
+                                    <span>
+                                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                        24/7 Cloud Schedule
+                                    </span>
                                 </label>
                             </div>
                         </div>
 
-                        <!-- Schedule Picker Box -->
+                        <!-- Schedule Picker Box with Quick Presets -->
                         <div id="scheduleConfigBox" class="schedule-box" style="display: none;">
-                            <label for="scheduleDateTime">Pick Date &amp; Time to Send:</label>
+                            <label for="scheduleDateTime">Target Execution Time (Cloud Dispatches Even If PC Is Off):</label>
                             <input type="datetime-local" id="scheduleDateTime" class="custom-datetime">
-                            <p class="schedule-hint">💡 Server will dispatch even if your phone/laptop is switched off.</p>
+                            
+                            <div class="schedule-quick-chips">
+                                <button type="button" class="quick-preset-chip" onclick="setQuickSchedule('midnight')">🌙 Tonight 12:00:00 AM (Midnight)</button>
+                                <button type="button" class="quick-preset-chip" onclick="setQuickSchedule('tomorrow9am')">☀️ Tomorrow 9:00 AM</button>
+                                <button type="button" class="quick-preset-chip" onclick="setQuickSchedule('1hour')">⚡ In 1 Hour</button>
+                            </div>
                         </div>
 
                         <!-- Dispatch Trigger Button -->
                         <div class="dispatch-action-row">
-                            <button id="btnDispatch" class="primary-btn glow-btn" onclick="promptDispatchConfirm()">
-                                🚀 Send Message Now
+                            <button id="btnDispatch" class="primary-btn glow-btn btn-lg" onclick="promptDispatchConfirm()">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                                <span id="btnDispatchText">Send Message Now</span>
+                                <span class="shortcut-pill">Ctrl+↵</span>
                             </button>
                         </div>
                     </div>
+
+                    <!-- Right: Interactive Live WhatsApp Message Preview Mockup -->
+                    <div class="card glass-card compose-preview-col">
+                        <div class="card-header">
+                            <div class="card-title-wrap">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                                <h3>Live Chat Preview</h3>
+                            </div>
+                            <span class="preview-badge-live">Real-time</span>
+                        </div>
+
+                        <!-- Realistic Phone Mockup Frame -->
+                        <div class="wa-phone-mockup">
+                            <div class="wa-mock-topbar">
+                                <div class="wa-mock-avatar">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#aebac1"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                </div>
+                                <div class="wa-mock-header-text">
+                                    <span class="wa-mock-recipient-name">Broadcast Recipient</span>
+                                    <span class="wa-mock-substatus">online</span>
+                                </div>
+                                <div class="wa-mock-actions">
+                                    <span>📹</span>
+                                    <span>📞</span>
+                                </div>
+                            </div>
+
+                            <div class="wa-mock-screen">
+                                <div class="wa-mock-date-pill">Today</div>
+                                
+                                <!-- Outgoing Message Bubble -->
+                                <div class="wa-chat-bubble outgoing">
+                                    <div id="previewBubbleText" class="wa-bubble-text">
+                                        <span class="wa-bubble-placeholder">Type your message or pick a template to preview live output...</span>
+                                    </div>
+                                    <div class="wa-bubble-meta">
+                                        <span id="previewBubbleTime" class="wa-bubble-time">12:00 AM</span>
+                                        <span class="wa-read-ticks">
+                                            <svg viewBox="0 0 16 15" width="16" height="15" fill="#53bdeb">
+                                                <path d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.319.319 0 0 0-.484.032l-.378.483a.418.418 0 0 0 .036.541l1.32 1.266c.143.14.361.125.484-.033l6.272-8.048a.366.366 0 0 0-.064-.512zm-4.1 0l-.478-.372a.365.365 0 0 0-.51.063L4.566 9.879a.32.32 0 0 1-.484.033L1.891 7.769a.366.366 0 0 0-.515.006l-.423.433a.364.364 0 0 0 .006.514l3.258 3.185c.143.14.361.125.484-.033l6.272-8.048a.366.366 0 0 0-.063-.512z"/>
+                                            </svg>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="wa-mock-inputbar">
+                                <span class="wa-mock-input-placeholder">Message</span>
+                                <span>🎤</span>
+                            </div>
+                        </div>
+
+                        <div class="preview-footer-note">
+                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                            <span>End-to-End Encrypted Delivery</span>
+                        </div>
+                    </div>
+
                 </div>
             </section>
 
@@ -304,8 +441,16 @@
             <section id="sectionScheduled" class="content-section">
                 <div class="card glass-card">
                     <div class="card-header">
-                        <h3>📅 Upcoming Scheduled Tasks</h3>
-                        <button class="secondary-btn" onclick="loadScheduledJobs()">🔄 Refresh</button>
+                        <div class="card-title-wrap">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            <h3>Upcoming Scheduled Tasks</h3>
+                        </div>
+                        <div class="header-action-group">
+                            <button class="secondary-btn btn-sm" onclick="loadScheduledJobs()">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
                     </div>
                     <div id="scheduledJobsList" class="jobs-list">
                         <p class="empty-state">No scheduled tasks pending.</p>
@@ -317,16 +462,42 @@
             <section id="sectionHistory" class="content-section">
                 <div class="card glass-card">
                     <div class="card-header">
-                        <h3>📊 Message Delivery History</h3>
-                        <button class="secondary-btn" onclick="loadHistory()">🔄 Refresh</button>
+                        <div class="card-title-wrap">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg>
+                            <h3>Message Delivery Logs</h3>
+                        </div>
+                        <div class="header-action-group">
+                            <button class="secondary-btn btn-sm" onclick="exportHistoryCSV()" title="Download CSV Report">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                <span>Export CSV</span>
+                            </button>
+                            <button class="secondary-btn btn-sm" onclick="loadHistory()">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
                     </div>
+
+                    <!-- Search & Filter Controls Ribbon -->
+                    <div class="history-filter-bar">
+                        <div class="history-search-wrap">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="historySearchInput" class="custom-input history-search-input" placeholder="Search logs by phone number or keyword..." oninput="filterHistoryLogs()">
+                        </div>
+                        <div class="history-status-pills">
+                            <button type="button" class="history-pill active" data-status="all" onclick="filterHistoryStatus('all', this)">All</button>
+                            <button type="button" class="history-pill" data-status="sent" onclick="filterHistoryStatus('sent', this)">Delivered ✅</button>
+                            <button type="button" class="history-pill" data-status="failed" onclick="filterHistoryStatus('failed', this)">Failed ❌</button>
+                        </div>
+                    </div>
+
                     <div class="table-container">
                         <table class="data-table">
                             <thead>
                                 <tr>
                                     <th>Recipient</th>
                                     <th>Status</th>
-                                    <th>Time</th>
+                                    <th>Execution Time</th>
                                     <th>Message Preview</th>
                                 </tr>
                             </thead>
@@ -341,6 +512,20 @@
             </section>
 
         </main>
+
+        <!-- App Footer with Shortcuts -->
+        <footer class="app-footer">
+            <div class="footer-shortcuts">
+                <span class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>↵</kbd> Send Now</span>
+                <span class="kbd-separator">•</span>
+                <span class="kbd-hint"><kbd>Esc</kbd> Close Modals</span>
+                <span class="kbd-separator">•</span>
+                <span class="footer-meta-badge">Supabase RLS Protected 🔒</span>
+            </div>
+            <div class="footer-copy">
+                AutoMate Cloud Platform • Production-Grade WhatsApp Automation
+            </div>
+        </footer>
 
         <!-- ================= MODALS SYSTEM ================= -->
 

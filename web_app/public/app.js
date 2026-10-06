@@ -240,10 +240,14 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(pollStatus, 3000);
     loadScheduledJobs();
     loadHistory();
+    updateChatPreview();
 
     // Event listeners
     document.getElementById('numbersInput').addEventListener('input', updateContactCount);
-    document.getElementById('messageInput').addEventListener('input', updateCharCount);
+    document.getElementById('messageInput').addEventListener('input', () => {
+        updateCharCount();
+        updateChatPreview();
+    });
 
     // Default schedule time = now + 1 hour in local format
     const now = new Date();
@@ -252,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     document.getElementById('scheduleDateTime').value = localISO;
 
-    // Global Modal Backdrop & ESC Listeners
+    // Global Modal Backdrop & ESC Listeners & Ctrl+Enter Dispatch Shortcut
     window.addEventListener('click', (e) => {
         if (e.target.classList.contains('modal-overlay')) {
             closeModal(e.target.id);
@@ -263,6 +267,13 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.modal-overlay').forEach(m => {
                 if (m.style.display === 'flex') closeModal(m.id);
             });
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            const composeSec = document.getElementById('sectionCompose');
+            if (composeSec && composeSec.classList.contains('active')) {
+                e.preventDefault();
+                promptDispatchConfirm();
+            }
         }
     });
 });
@@ -297,7 +308,9 @@ function openPrivacyModal() {
 function initClock() {
     function updateClock() {
         const d = new Date();
-        document.getElementById('liveClock').textContent = '🕒 ' + d.toTimeString().split(' ')[0];
+        const timeStr = d.toTimeString().split(' ')[0];
+        const clockSpan = document.getElementById('clockText');
+        if (clockSpan) clockSpan.textContent = timeStr;
     }
     updateClock();
     setInterval(updateClock, 1000);
@@ -313,6 +326,7 @@ function switchTab(tabName) {
     } else if (tabName === 'compose') {
         document.getElementById('tabBtnCompose').classList.add('active');
         document.getElementById('sectionCompose').classList.add('active');
+        updateChatPreview();
     } else if (tabName === 'scheduled') {
         document.getElementById('tabBtnScheduled').classList.add('active');
         document.getElementById('sectionScheduled').classList.add('active');
@@ -337,6 +351,7 @@ async function pollStatus() {
         const connectedBox = document.getElementById('connectedStateBox');
         const qrImage = document.getElementById('qrImage');
         const qrLoading = document.getElementById('qrLoading');
+        const metricNode = document.getElementById('metricNodeStatus');
 
         badge.className = 'status-badge ' + data.status;
 
@@ -351,6 +366,10 @@ async function pollStatus() {
             qrContainer.style.display = 'none';
             connectedBox.style.display = 'flex';
             document.getElementById('connectedAccountName').textContent = data.user?.id || 'Connected';
+            if (metricNode) {
+                metricNode.textContent = 'Active (Baileys v2.4)';
+                metricNode.className = 'metric-value text-accent';
+            }
         } else if (data.status === 'qr_ready' && data.qrCode) {
             isConnected = false;
             statusText.textContent = 'Scan QR Code';
@@ -359,6 +378,10 @@ async function pollStatus() {
             qrImage.src = data.qrCode;
             qrImage.style.display = 'block';
             qrLoading.style.display = 'none';
+            if (metricNode) {
+                metricNode.textContent = 'QR Code Ready';
+                metricNode.className = 'metric-value';
+            }
         } else {
             isConnected = false;
             statusText.textContent = 'Initializing...';
@@ -366,6 +389,10 @@ async function pollStatus() {
             connectedBox.style.display = 'none';
             qrImage.style.display = 'none';
             qrLoading.style.display = 'flex';
+            if (metricNode) {
+                metricNode.textContent = 'Standby / Pre-Warming';
+                metricNode.className = 'metric-value';
+            }
         }
     } catch (err) {
         console.error('Failed to poll status:', err);
@@ -486,18 +513,77 @@ function clearContacts() {
     updateContactCount();
 }
 
+// Drag & Drop CSV / TXT Handling
+function handleDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const zone = document.getElementById('dropZoneWrap');
+    if (zone) zone.classList.add('drag-active');
+}
+
+function handleDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const zone = document.getElementById('dropZoneWrap');
+    if (zone) zone.classList.remove('drag-active');
+}
+
+function handleDropFile(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const zone = document.getElementById('dropZoneWrap');
+    if (zone) zone.classList.remove('drag-active');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        processUploadedFile(e.dataTransfer.files[0]);
+    }
+}
+
 function handleFileUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
+    processUploadedFile(file);
+    event.target.value = '';
+}
 
+function processUploadedFile(file) {
+    if (!file) return;
     const reader = new FileReader();
     reader.onload = (e) => {
         const text = e.target.result;
-        document.getElementById('numbersInput').value = text;
+        // Parse numbers: handles comma, semicolon, newline or tab separated
+        const numbers = text.split(/[\r\n,;]+/)
+            .map(s => s.trim().replace(/[^0-9+]/g, ''))
+            .filter(s => s.length >= 7);
+
+        if (numbers.length === 0) {
+            showToast('⚠️ No valid phone numbers found in file.');
+            return;
+        }
+
+        const input = document.getElementById('numbersInput');
+        const existing = input.value.trim();
+        if (existing) {
+            input.value = existing + '\n' + numbers.join('\n');
+        } else {
+            input.value = numbers.join('\n');
+        }
         updateContactCount();
-        showToast(`Imported ${file.name}`);
+        showToast(`✅ Imported ${numbers.length} contacts from ${file.name}`);
     };
     reader.readAsText(file);
+}
+
+function addSampleTestNumber() {
+    const input = document.getElementById('numbersInput');
+    const sample = '919876543210';
+    const current = input.value.trim();
+    if (!current) {
+        input.value = sample;
+    } else {
+        input.value = current + '\n' + sample;
+    }
+    updateContactCount();
+    showToast('➕ Added sample contact (+919876543210). Edit as needed!');
 }
 
 function insertEmoji(emoji) {
@@ -509,11 +595,13 @@ function insertEmoji(emoji) {
     textarea.selectionStart = textarea.selectionEnd = start + emoji.length;
     textarea.focus();
     updateCharCount();
+    updateChatPreview();
 }
 
 function clearMessage() {
     document.getElementById('messageInput').value = '';
     updateCharCount();
+    updateChatPreview();
 }
 
 function updateCharCount() {
@@ -524,17 +612,88 @@ function updateCharCount() {
     document.getElementById('wordCount').textContent = `${words} words`;
 }
 
+// Live Realistic WhatsApp Message Preview Formatter
+function updateChatPreview() {
+    const msgInput = document.getElementById('messageInput');
+    const previewBubble = document.getElementById('previewBubbleText');
+    const previewTime = document.getElementById('previewBubbleTime');
+    if (!previewBubble) return;
+
+    const raw = msgInput ? msgInput.value : '';
+    if (!raw.trim()) {
+        previewBubble.innerHTML = '<span class="wa-bubble-placeholder">Type your message or pick a template to preview live output...</span>';
+    } else {
+        let formatted = escapeHtml(raw);
+        // *bold*
+        formatted = formatted.replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>');
+        // _italic_
+        formatted = formatted.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+        // ~strike~
+        formatted = formatted.replace(/~([^~\n]+)~/g, '<del>$1</del>');
+        // ```code```
+        formatted = formatted.replace(/```([^`]+)```/g, '<code>$1</code>');
+        // newlines to <br>
+        formatted = formatted.replace(/\n/g, '<br>');
+        previewBubble.innerHTML = formatted;
+    }
+
+    if (previewTime) {
+        const d = new Date();
+        let hours = d.getHours();
+        const minutes = d.getMinutes().toString().padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        previewTime.textContent = `${hours}:${minutes} ${ampm}`;
+    }
+}
+
+// Quick Schedule Presets
+function setQuickSchedule(preset) {
+    const d = new Date();
+    let toastLabel = '';
+
+    if (preset === 'midnight') {
+        // Tonight 12:00 AM (next calendar day at 00:00:00)
+        d.setDate(d.getDate() + 1);
+        d.setHours(0, 0, 0, 0);
+        toastLabel = 'Tonight at 12:00:00 AM (Midnight)';
+    } else if (preset === 'tomorrow9am') {
+        d.setDate(d.getDate() + 1);
+        d.setHours(9, 0, 0, 0);
+        toastLabel = 'Tomorrow at 9:00 AM';
+    } else if (preset === '1hour') {
+        d.setHours(d.getHours() + 1);
+        toastLabel = 'In 1 Hour';
+    }
+
+    const localISO = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const dateInput = document.getElementById('scheduleDateTime');
+    if (dateInput) dateInput.value = localISO;
+
+    const schedRadio = document.querySelector('input[name="dispatchMode"][value="schedule"]');
+    if (schedRadio) {
+        schedRadio.checked = true;
+        toggleDispatchMode();
+    }
+
+    showToast(`⏰ Preset applied: ${toastLabel}`);
+}
+
 function toggleDispatchMode() {
     const mode = document.querySelector('input[name="dispatchMode"]:checked').value;
     const scheduleBox = document.getElementById('scheduleConfigBox');
     const btn = document.getElementById('btnDispatch');
+    const btnText = document.getElementById('btnDispatchText');
 
     if (mode === 'schedule') {
         scheduleBox.style.display = 'block';
-        btn.textContent = '⏰ Schedule Message Broadcast';
+        if (btnText) btnText.textContent = 'Schedule Message Broadcast';
+        else btn.textContent = '⏰ Schedule Message Broadcast';
     } else {
         scheduleBox.style.display = 'none';
-        btn.textContent = '🚀 Send Message Now';
+        if (btnText) btnText.textContent = 'Send Message Now';
+        else btn.textContent = '🚀 Send Message Now';
     }
 }
 
@@ -719,31 +878,100 @@ async function cancelJob(id) {
 
 // ================= DELIVERY HISTORY & DETAILS MODAL =================
 
+let currentHistoryFilterStatus = 'all';
+let currentHistorySearchQuery = '';
+
+function filterHistoryStatus(status, btn) {
+    currentHistoryFilterStatus = status;
+    document.querySelectorAll('.history-status-pills .history-pill').forEach(p => p.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderFilteredHistory();
+}
+
+function filterHistoryLogs() {
+    const input = document.getElementById('historySearchInput');
+    currentHistorySearchQuery = (input ? input.value : '').toLowerCase().trim();
+    renderFilteredHistory();
+}
+
+function renderFilteredHistory() {
+    const tbody = document.getElementById('historyTableBody');
+    if (!tbody) return;
+
+    let list = cachedHistory || [];
+
+    if (currentHistoryFilterStatus !== 'all') {
+        list = list.filter(item => (item.status || '').toLowerCase() === currentHistoryFilterStatus);
+    }
+
+    if (currentHistorySearchQuery) {
+        list = list.filter(item => 
+            (item.number || '').toLowerCase().includes(currentHistorySearchQuery) ||
+            (item.message || '').toLowerCase().includes(currentHistorySearchQuery) ||
+            (item.status || '').toLowerCase().includes(currentHistorySearchQuery)
+        );
+    }
+
+    if (list.length === 0) {
+        const msg = (cachedHistory && cachedHistory.length > 0)
+            ? 'No delivery records match your filter / search.'
+            : 'No message history available yet.';
+        tbody.innerHTML = `<tr><td colspan="4" class="empty-state">${msg}</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = list.map((item) => {
+        const originalIndex = cachedHistory.indexOf(item);
+        const timeStr = item.time ? new Date(item.time).toLocaleString() : 'N/A';
+        const statusClass = (item.status === 'sent' || item.status === 'completed') ? 'sent' : 'failed';
+        return `
+            <tr class="interactive-row" onclick="openHistoryDetailsModal(${originalIndex})">
+                <td><strong>+${escapeHtml(item.number)}</strong></td>
+                <td><span class="status-pill ${statusClass}">${escapeHtml((item.status || 'UNKNOWN').toUpperCase())}</span></td>
+                <td>${timeStr}</td>
+                <td>${escapeHtml(item.message && item.message.length > 45 ? item.message.substring(0, 45) + '...' : (item.message || ''))}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
 async function loadHistory() {
     try {
         const res = await apiFetch('/api/history');
         cachedHistory = await res.json();
-        const tbody = document.getElementById('historyTableBody');
-
-        if (cachedHistory.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No message history available yet.</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = cachedHistory.map((item, index) => {
-            const timeStr = new Date(item.time).toLocaleTimeString();
-            return `
-                <tr class="interactive-row" onclick="openHistoryDetailsModal(${index})">
-                    <td>+${item.number}</td>
-                    <td><span class="status-pill ${item.status}">${item.status.toUpperCase()}</span></td>
-                    <td>${timeStr}</td>
-                    <td>${item.message.length > 45 ? item.message.substring(0, 45) + '...' : item.message}</td>
-                </tr>
-            `;
-        }).join('');
+        renderFilteredHistory();
     } catch (err) {
         console.error('Failed to load history:', err);
     }
+}
+
+function exportHistoryCSV() {
+    if (!cachedHistory || cachedHistory.length === 0) {
+        showToast('⚠️ No delivery logs to export.');
+        return;
+    }
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Phone Number,Status,Execution Time,Message,Error Details\r\n";
+
+    cachedHistory.forEach(item => {
+        const number = `"+${(item.number || '').replace(/"/g, '""')}"`;
+        const status = `"${(item.status || '').replace(/"/g, '""')}"`;
+        const time = `"${new Date(item.time).toLocaleString().replace(/"/g, '""')}"`;
+        const msg = `"${(item.message || '').replace(/"/g, '""').replace(/\n/g, ' ')}"`;
+        const err = `"${(item.error || '').replace(/"/g, '""')}"`;
+        csvContent += `${number},${status},${time},${msg},${err}\r\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `AutoMate_Delivery_Report_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast(`📊 Exported ${cachedHistory.length} delivery records as CSV!`);
 }
 
 function openHistoryDetailsModal(index) {
@@ -817,6 +1045,7 @@ function insertTemplate(type) {
     }
     msgInput.value = text;
     updateCharCount();
+    updateChatPreview();
     msgInput.focus();
     showToast(`Template loaded! Feel free to customize placeholders.`);
 }
