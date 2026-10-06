@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pnjoqcmqlmpnvvehkixr.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || 'sb_publishable_aiUtzrjlXuJIzd-Vqcc8Ug_YGs33k1o';
 
 let supabase = null;
 if (SUPABASE_KEY) {
