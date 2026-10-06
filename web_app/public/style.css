@@ -1369,3 +1369,466 @@ body {
 .interactive-row:hover {
     background: var(--hover-bg);
 }
+
+/* ================================================================
+   Google Authentication & User Profile Pills
+   ================================================================ */
+.google-auth-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #ffffff;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: var(--font-body);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.google-auth-btn:hover {
+    background: #f8f9fa;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transform: translateY(-1px);
+}
+
+[data-theme="dark"] .google-auth-btn {
+    background: #202c33;
+    color: #e9edef;
+    border-color: #3b4a54;
+}
+
+[data-theme="dark"] .google-auth-btn:hover {
+    background: #2a3942;
+    border-color: #00a884;
+}
+
+.user-profile-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 168, 132, 0.12);
+    border: 1px solid rgba(0, 168, 132, 0.35);
+    border-radius: 24px;
+    padding: 4px 12px 4px 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.user-profile-badge:hover {
+    background: rgba(0, 168, 132, 0.22);
+    border-color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.user-avatar-img {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--accent);
+    background: var(--card-bg);
+}
+
+.user-profile-info {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+}
+
+.user-display-name {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    max-width: 110px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-security-tag {
+    font-size: 9.5px;
+    font-weight: 500;
+    color: var(--accent);
+}
+
+/* Feedback Nav Button */
+.feedback-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(247, 168, 49, 0.12);
+    color: var(--warning);
+    border: 1px solid rgba(247, 168, 49, 0.35);
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.feedback-nav-btn:hover {
+    background: rgba(247, 168, 49, 0.22);
+    transform: translateY(-1px);
+}
+
+/* ================================================================
+   Message Templates Library Toolbar
+   ================================================================ */
+.templates-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 6px 10px;
+    background: rgba(0, 168, 132, 0.06);
+    border: 1px dashed rgba(0, 168, 132, 0.25);
+    border-radius: 10px;
+    flex-wrap: wrap;
+}
+
+.templates-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.template-chips-wrap {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.template-chip {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text-primary);
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: var(--font-body);
+}
+
+.template-chip:hover {
+    background: var(--accent);
+    color: #ffffff;
+    border-color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px var(--accent-glow);
+}
+
+/* ================================================================
+   Google Auth Modal & Profile Modal Details
+   ================================================================ */
+.google-action-btn-large {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    background: #ffffff;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+    margin: 12px 0 16px;
+}
+
+.google-action-btn-large:hover {
+    background: #f8f9fa;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.16);
+    transform: translateY(-1px);
+}
+
+[data-theme="dark"] .google-action-btn-large {
+    background: #2a3942;
+    color: #ffffff;
+    border-color: #3b4a54;
+}
+
+[data-theme="dark"] .google-action-btn-large:hover {
+    background: #32434d;
+    border-color: var(--accent);
+}
+
+.auth-guarantee-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.auth-guarantee-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.auth-guarantee-item p {
+    margin: 0;
+    line-height: 1.4;
+}
+
+.auth-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 14px 0;
+    color: var(--text-muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--card-border);
+}
+
+.auth-divider span {
+    padding: 0 10px;
+}
+
+/* Profile Modal Cards */
+.profile-header-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+
+.profile-card-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--accent);
+}
+
+.profile-card-details h4 {
+    font-size: 16px;
+    margin: 0 0 4px;
+    color: var(--text-primary);
+}
+
+.profile-card-details p {
+    font-size: 12.5px;
+    margin: 0 0 6px;
+    color: var(--text-secondary);
+}
+
+.profile-badge-active {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(0, 168, 132, 0.12);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.profile-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.meta-item {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+}
+
+.meta-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+}
+
+.meta-val {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.text-success {
+    color: var(--accent) !important;
+}
+
+/* ================================================================
+   Feedback & Review System Styling
+   ================================================================ */
+.feedback-rating-box {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.rating-box-title {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.star-rating-row {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    font-size: 32px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.star-btn {
+    color: #4b5563;
+    transition: transform 0.15s, color 0.15s;
+}
+
+.star-btn.active {
+    color: #f7a831;
+}
+
+.star-btn:hover {
+    transform: scale(1.2);
+    color: #f7a831;
+}
+
+.rating-selected-label {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--warning);
+}
+
+.feedback-category-wrap {
+    margin-bottom: 14px;
+}
+
+.category-title {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+}
+
+.category-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.category-pill {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    color: var(--text-secondary);
+    border-radius: 16px;
+    padding: 5px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.category-pill.active {
+    background: rgba(0, 168, 132, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.feedback-field-wrap {
+    margin-bottom: 14px;
+}
+
+.feedback-field-wrap label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.feedback-textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.recent-feedback-section {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--card-border);
+}
+
+.recent-feedback-section h4 {
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.recent-reviews-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 140px;
+    overflow-y: auto;
+}
+
+.review-item-mini {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.review-stars {
+    color: #f7a831;
+    font-size: 13px;
+    margin-bottom: 3px;
+}
+
+.review-text {
+    font-size: 12px;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+    line-height: 1.35;
+}
+
+.review-author {
+    font-size: 10.5px;
+    color: var(--text-muted);
+}
+

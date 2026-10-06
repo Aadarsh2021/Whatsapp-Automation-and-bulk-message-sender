@@ -84,3 +84,30 @@ BEGIN
       AND executed_at < NOW() - INTERVAL '14 days';
 END;
 $$ LANGUAGE plpgsql;
+
+-- 6. User Feedback & Beta Review System
+CREATE TABLE IF NOT EXISTS public.user_feedback (
+    id BIGSERIAL PRIMARY KEY,
+    device_id TEXT NOT NULL,
+    user_email TEXT,
+    rating INT NOT NULL DEFAULT 5,
+    category TEXT DEFAULT 'general',
+    comment TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_created 
+ON public.user_feedback (created_at DESC);
+
+ALTER TABLE public.user_feedback ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow anyone to submit feedback" 
+ON public.user_feedback 
+FOR INSERT 
+WITH CHECK (true);
+
+CREATE POLICY "Allow public read access on feedback" 
+ON public.user_feedback 
+FOR SELECT 
+USING (true);
+

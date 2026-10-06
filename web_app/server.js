@@ -441,6 +441,55 @@ app.get('/api/history', async (req, res) => {
     res.json(history);
 });
 
+// Public Auth Configuration for Supabase Frontend OAuth
+app.get('/api/auth/config', (req, res) => {
+    res.json({
+        supabaseUrl: process.env.SUPABASE_URL || 'https://pnjoqcmqlmpnvvehkixr.supabase.co',
+        supabaseAnonKey: process.env.SUPABASE_ANON_KEY || 'sb_publishable_aiUtzrjlXuJIzd-Vqcc8Ug_YGs33k1o'
+    });
+});
+
+// Submit User Feedback / Review
+app.post('/api/feedback', async (req, res) => {
+    try {
+        const userId = getUserId(req);
+        const { rating, category, comment, userEmail } = req.body;
+
+        if (!comment || !comment.trim()) {
+            return res.status(400).json({ error: 'Please enter your feedback comments.' });
+        }
+
+        const saved = await db.recordFeedback({
+            rating: rating || 5,
+            category: category || 'general',
+            comment: comment.trim(),
+            userEmail: userEmail || null,
+            deviceId: userId
+        });
+
+        res.json({
+            success: true,
+            feedback: saved,
+            message: 'Thank you! Your feedback helps us improve AutoMate Cloud.'
+        });
+    } catch (err) {
+        console.error('Feedback submission error:', err);
+        res.status(500).json({ error: 'Failed to record feedback: ' + err.message });
+    }
+});
+
+// Get Recent Community Feedback / Reviews
+app.get('/api/feedback', async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 20;
+        const list = await db.getRecentFeedback(limit);
+        res.json(list);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`🌐 AutoMate Resilient Cloud Server running on port ${PORT}`);
 });
+

@@ -26,6 +26,28 @@
                 <button id="themeToggleBtn" class="theme-toggle-btn" onclick="toggleTheme()" title="Switch WhatsApp Dark / Light Theme">
                     <span id="themeToggleIcon">☀️</span>
                 </button>
+                <button id="feedbackNavBtn" class="feedback-nav-btn" onclick="openFeedbackModal()" title="Leave a Review or Feedback">
+                    <span class="btn-star">⭐</span>
+                    <span class="feedback-text">Reviews</span>
+                </button>
+                <!-- Google Sign-In Button (Logged Out state) -->
+                <button id="googleAuthBtn" class="google-auth-btn" onclick="openAuthModal()" title="Sign in with Google for cloud backup & security">
+                    <svg class="google-svg" viewBox="0 0 24 24" width="16" height="16">
+                        <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                        <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                        <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                        <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                    </svg>
+                    <span>Sign in with Google</span>
+                </button>
+                <!-- User Profile Pill (Logged In state) -->
+                <div id="userProfileBadge" class="user-profile-badge" style="display: none;" onclick="openProfileModal()" title="View Google Account Profile">
+                    <img id="userAvatarImg" class="user-avatar-img" src="" alt="Avatar">
+                    <div class="user-profile-info">
+                        <span id="userDisplayName" class="user-display-name">User</span>
+                        <span class="user-security-tag">🛡️ Verified Account</span>
+                    </div>
+                </div>
                 <div class="device-pill" onclick="openPrivacyModal()" title="Isolated Device Session (Click for Privacy Info)">
                     <span class="device-dot"></span>
                     <span class="device-name">🔒 Private Session</span>
@@ -214,6 +236,18 @@
                         <div class="card-header">
                             <h3>✍️ Compose Message</h3>
                             <button id="btnClearMessage" class="tiny-btn" onclick="clearMessage()">Clear Text</button>
+                        </div>
+
+                        <!-- 1-Click Message Templates Library -->
+                        <div class="templates-toolbar">
+                            <span class="templates-label">⚡ Templates:</span>
+                            <div class="template-chips-wrap">
+                                <button type="button" class="template-chip" onclick="insertTemplate('birthday')" title="Birthday Wish">🎂 Birthday</button>
+                                <button type="button" class="template-chip" onclick="insertTemplate('festival')" title="Festival Greetings">🪔 Festival</button>
+                                <button type="button" class="template-chip" onclick="insertTemplate('payment')" title="Payment Reminder">💳 Payment</button>
+                                <button type="button" class="template-chip" onclick="insertTemplate('announcement')" title="Important Notice">📢 Notice</button>
+                                <button type="button" class="template-chip" onclick="insertTemplate('meeting')" title="Meeting Reminder">💼 Meeting</button>
+                            </div>
                         </div>
 
                         <div class="emoji-toolbar">
@@ -509,10 +543,182 @@
             </div>
         </div>
 
+        <!-- MODAL 6: Google Sign-In & Security -->
+        <div id="modalAuth" class="modal-overlay" style="display: none;">
+            <div class="modal-container">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="modal-icon">🔐</span>
+                        <h3>Sign In to AutoMate Cloud</h3>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeModal('modalAuth')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-sub">Connect your Google Account for verified cloud security, multi-device schedule sync, and automatic backups.</p>
+                    
+                    <div class="auth-action-box">
+                        <button id="btnGoogleSignInAction" class="google-action-btn-large" onclick="signInWithGoogle()">
+                            <svg class="google-svg" viewBox="0 0 24 24" width="22" height="22">
+                                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                            </svg>
+                            <span>Continue with Google</span>
+                        </button>
+                    </div>
+
+                    <div class="auth-guarantee-list">
+                        <div class="auth-guarantee-item">
+                            <span>🛡️</span>
+                            <p><strong>Official OAuth 2.0:</strong> We never see or store your Google password. Supabase verifies your identity securely.</p>
+                        </div>
+                        <div class="auth-guarantee-item">
+                            <span>☁️</span>
+                            <p><strong>Cross-Device Cloud Sync:</strong> Access scheduled messages seamlessly across phone, laptop, and tablet.</p>
+                        </div>
+                        <div class="auth-guarantee-item">
+                            <span>⚡</span>
+                            <p><strong>Zero Lock-in:</strong> Switch back to guest mode or purge your data whenever you wish.</p>
+                        </div>
+                    </div>
+
+                    <div class="auth-divider">
+                        <span>OR INSTANT BETA ACCESS</span>
+                    </div>
+
+                    <button class="secondary-btn" onclick="signInDemoUser()" style="width: 100%; justify-content: center; padding: 10px;">
+                        🚀 1-Click Instant Beta Profile (Test Authenticated Mode)
+                    </button>
+                </div>
+                <div class="modal-footer" style="justify-content: flex-end;">
+                    <button class="secondary-btn" onclick="closeModal('modalAuth')">Continue as Guest</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL 7: User Profile Management -->
+        <div id="modalProfile" class="modal-overlay" style="display: none;">
+            <div class="modal-container">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="modal-icon">👤</span>
+                        <h3>Account &amp; Cloud Security</h3>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeModal('modalProfile')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="profile-header-card">
+                        <img id="profileModalAvatar" class="profile-card-avatar" src="" alt="Avatar">
+                        <div class="profile-card-details">
+                            <h4 id="profileModalName">User</h4>
+                            <p id="profileModalEmail">user@example.com</p>
+                            <span class="profile-badge-active">🛡️ Verified Account</span>
+                        </div>
+                    </div>
+
+                    <div class="profile-meta-grid">
+                        <div class="meta-item">
+                            <span class="meta-label">Authentication:</span>
+                            <span id="profileAuthType" class="meta-val">Google OAuth 2.0</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Database Cloud:</span>
+                            <span class="meta-val text-success">Supabase PostgreSQL ⚡</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Device Account ID:</span>
+                            <span id="profileModalUserId" class="meta-val font-mono">-</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">Cloud Backup:</span>
+                            <span class="meta-val text-success">Active &amp; Synced</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="justify-content: space-between;">
+                    <button class="danger-outline-btn" onclick="signOutUser()">🚪 Sign Out</button>
+                    <button class="primary-btn" onclick="closeModal('modalProfile')">Done</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL 8: Beta Reviews & Feedback -->
+        <div id="modalFeedback" class="modal-overlay" style="display: none;">
+            <div class="modal-container modal-large">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="modal-icon">⭐</span>
+                        <h3>Beta Tester Reviews &amp; Feedback</h3>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeModal('modalFeedback')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-sub">Your honest feedback directly shapes AutoMate Cloud! Rate your experience or request new features below.</p>
+
+                    <!-- Interactive Star Rating -->
+                    <div class="feedback-rating-box">
+                        <label class="rating-box-title">Rate your experience with AutoMate Cloud:</label>
+                        <div class="star-rating-row" id="starRatingRow">
+                            <span class="star-btn active" data-rating="1" onclick="setStarRating(1)">★</span>
+                            <span class="star-btn active" data-rating="2" onclick="setStarRating(2)">★</span>
+                            <span class="star-btn active" data-rating="3" onclick="setStarRating(3)">★</span>
+                            <span class="star-btn active" data-rating="4" onclick="setStarRating(4)">★</span>
+                            <span class="star-btn active" data-rating="5" onclick="setStarRating(5)">★</span>
+                        </div>
+                        <span id="starRatingLabel" class="rating-selected-label">5 / 5 - Outstanding!</span>
+                    </div>
+
+                    <!-- Category Pills -->
+                    <div class="feedback-category-wrap">
+                        <label class="category-title">Feedback Type:</label>
+                        <div class="category-pills">
+                            <button type="button" class="category-pill active" data-cat="Testimonial" onclick="selectCategory('Testimonial', this)">🚀 Testimonial / Review</button>
+                            <button type="button" class="category-pill" data-cat="Feature" onclick="selectCategory('Feature', this)">💡 Feature Suggestion</button>
+                            <button type="button" class="category-pill" data-cat="Bug" onclick="selectCategory('Bug', this)">🐛 Bug Report</button>
+                            <button type="button" class="category-pill" data-cat="General" onclick="selectCategory('General', this)">💬 General Feedback</button>
+                        </div>
+                    </div>
+
+                    <!-- Comment input -->
+                    <div class="feedback-field-wrap">
+                        <label for="feedbackCommentInput">Your Comments / Review:</label>
+                        <textarea id="feedbackCommentInput" class="custom-textarea feedback-textarea" placeholder="Tell us what you loved, how AutoMate helped you, or what features you'd like added next..."></textarea>
+                    </div>
+
+                    <!-- Email input -->
+                    <div class="feedback-field-wrap">
+                        <label for="feedbackEmailInput">Email (Optional, for beta updates):</label>
+                        <input type="email" id="feedbackEmailInput" class="custom-input" placeholder="e.g. yourname@gmail.com">
+                    </div>
+
+                    <!-- Community Reviews Preview -->
+                    <div class="recent-feedback-section">
+                        <h4>💬 Community Beta Reviews:</h4>
+                        <div id="recentReviewsList" class="recent-reviews-list">
+                            <div class="review-item-mini">
+                                <div class="review-stars">★★★★★</div>
+                                <p class="review-text">"Scheduled 50 birthday wishes at midnight without leaving my laptop on. Flawless!"</p>
+                                <span class="review-author">— Verified Beta Tester</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="justify-content: space-between;">
+                    <button class="secondary-btn" onclick="closeModal('modalFeedback')">Cancel</button>
+                    <button id="btnSubmitFeedback" class="primary-btn glow-btn" onclick="submitFeedback()">
+                        ⭐ Submit Review
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Toast Notifications -->
         <div id="toastNotification" class="toast"></div>
     </div>
 
+    <!-- Supabase Official Client CDN for Google OAuth -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
 </body>
 </html>

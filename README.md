@@ -59,6 +59,23 @@ Crafted using the exact official WhatsApp Web design system:
 * We **never** access, monitor, or store personal chats or media.
 * A dedicated **"Wipe All My Data & Disconnect"** button permanently purges all scheduled jobs, history, and unlinks your credentials in 1 second.
 
+### 🔐 7. Google Login & Verified Cloud Security
+* **Continue with Google:** Users can optionally sign in with their Google Account (powered by Supabase Auth) for enhanced trust, avatar profile display, and cross-device schedule synchronization.
+* **Non-Blocking Guest Mode:** Users can still broadcast and test anonymously without mandatory login.
+
+### ⚡ 8. 1-Click Message Templates Library
+* Quick-chips toolbar in the composer for instant message drafting:
+  * 🎂 **Birthday Wishes:** Polite, emoji-rich celebration messages.
+  * 🪔 **Festival Greetings:** Warm wishes for Diwali, Eid, New Year, Christmas, etc.
+  * 💳 **Payment Due Reminders:** Courteous invoice reminder format with `{Amount}` & `{Date}` placeholders.
+  * 📢 **Important Announcements:** Formal notices with date variables.
+  * 💼 **Meeting Reminders:** Punctual scheduling confirmations.
+
+### ⭐ 9. Beta Tester Feedback & Review System
+* Early beta testers can submit interactive 5-star ratings, category tags, and reviews directly from the web app.
+* Dual persistence (Supabase PostgreSQL `user_feedback` table + resilient local storage fallback) ensures zero review loss.
+
+
 ---
 
 ## 🏗️ System Architecture

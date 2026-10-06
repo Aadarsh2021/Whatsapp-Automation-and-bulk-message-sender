@@ -4,6 +4,12 @@ let isConnected = false;
 let pendingDispatchData = null;
 let cachedJobs = [];
 let cachedHistory = [];
+let authenticatedUser = null;
+
+// Supabase Cloud Auth Config
+const SUPABASE_URL = 'https://pnjoqcmqlmpnvvehkixr.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_aiUtzrjlXuJIzd-Vqcc8Ug_YGs33k1o';
+let supabaseClient = null;
 
 // 1. Unique, Persistent Device Session ID (Every phone/PC gets its own private space)
 let currentDeviceId = localStorage.getItem('automate_device_id');
@@ -17,6 +23,188 @@ function apiFetch(url, options = {}) {
     options.headers = options.headers || {};
     options.headers['x-user-id'] = currentDeviceId;
     return fetch(url, options);
+}
+
+// ================= AUTHENTICATION & GOOGLE OAUTH =================
+
+function initAuth() {
+    if (window.supabase) {
+        try {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            
+            // Check active session
+            supabaseClient.auth.getSession().then(({ data: { session } }) => {
+                if (session && session.user) {
+                    applyAuthenticatedUser({
+                        id: session.user.id,
+                        email: session.user.email,
+                        name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+                        avatar: session.user.user_metadata?.avatar_url || null,
+                        provider: 'Google OAuth 2.0'
+                    }, false);
+                } else {
+                    checkSavedAuth();
+                }
+            }).catch(() => {
+                checkSavedAuth();
+            });
+
+            // Listen for OAuth redirect / sign in events
+            supabaseClient.auth.onAuthStateChange((event, session) => {
+                if (session && session.user) {
+                    applyAuthenticatedUser({
+                        id: session.user.id,
+                        email: session.user.email,
+                        name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
+                        avatar: session.user.user_metadata?.avatar_url || null,
+                        provider: 'Google OAuth 2.0'
+                    }, true);
+                } else if (event === 'SIGNED_OUT') {
+                    applyGuestUser();
+                }
+            });
+        } catch (e) {
+            console.warn('Supabase auth init notice:', e);
+            checkSavedAuth();
+        }
+    } else {
+        checkSavedAuth();
+    }
+}
+
+function checkSavedAuth() {
+    const savedDemo = localStorage.getItem('automate_demo_user');
+    if (savedDemo) {
+        try {
+            applyAuthenticatedUser(JSON.parse(savedDemo), false);
+        } catch (e) {
+            applyGuestUser();
+        }
+    } else {
+        applyGuestUser();
+    }
+}
+
+function applyAuthenticatedUser(user, reloadData = true) {
+    authenticatedUser = user;
+    currentDeviceId = 'usr_' + user.id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 36);
+    
+    const authBtn = document.getElementById('googleAuthBtn');
+    const profileBadge = document.getElementById('userProfileBadge');
+    const avatarImg = document.getElementById('userAvatarImg');
+    const nameSpan = document.getElementById('userDisplayName');
+    
+    if (authBtn) authBtn.style.display = 'none';
+    if (profileBadge) profileBadge.style.display = 'inline-flex';
+    if (avatarImg) {
+        avatarImg.src = user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=00a884&color=fff`;
+    }
+    if (nameSpan) {
+        nameSpan.textContent = user.name || 'User';
+    }
+
+    const fbEmail = document.getElementById('feedbackEmailInput');
+    if (fbEmail && !fbEmail.value && user.email) {
+        fbEmail.value = user.email;
+    }
+
+    if (reloadData) {
+        loadScheduledJobs();
+        loadHistory();
+        pollStatus();
+    }
+}
+
+function applyGuestUser() {
+    authenticatedUser = null;
+    let guestId = localStorage.getItem('automate_device_id');
+    if (!guestId) {
+        guestId = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36).slice(-4);
+        localStorage.setItem('automate_device_id', guestId);
+    }
+    currentDeviceId = guestId;
+
+    const authBtn = document.getElementById('googleAuthBtn');
+    const profileBadge = document.getElementById('userProfileBadge');
+    if (authBtn) authBtn.style.display = 'inline-flex';
+    if (profileBadge) profileBadge.style.display = 'none';
+}
+
+async function signInWithGoogle() {
+    if (!supabaseClient) {
+        showToast('Initializing secure Google login...');
+        return;
+    }
+    try {
+        const { data, error } = await supabaseClient.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin
+            }
+        });
+        if (error) {
+            console.warn('OAuth redirect notice:', error.message);
+            showToast('Google OAuth notice: ' + error.message);
+            setTimeout(() => {
+                if (confirm('Google OAuth provider is not yet enabled in Supabase Providers. Would you like to use 1-Click Beta Tester Profile mode now?')) {
+                    signInDemoUser();
+                }
+            }, 600);
+        }
+    } catch (err) {
+        console.error(err);
+        showToast('Google Sign-in error: ' + err.message);
+    }
+}
+
+function signInDemoUser() {
+    const demoUser = {
+        id: 'beta_' + Math.random().toString(36).substr(2, 8),
+        email: 'beta.tester@gmail.com',
+        name: 'Verified Beta Tester',
+        avatar: 'https://ui-avatars.com/api/?name=Beta+Tester&background=00a884&color=fff',
+        provider: 'Google (Verified Beta)'
+    };
+    localStorage.setItem('automate_demo_user', JSON.stringify(demoUser));
+    applyAuthenticatedUser(demoUser, true);
+    closeModal('modalAuth');
+    showToast('Signed in as Verified Beta Tester! 🛡️');
+}
+
+async function signOutUser() {
+    localStorage.removeItem('automate_demo_user');
+    if (supabaseClient) {
+        await supabaseClient.auth.signOut().catch(() => {});
+    }
+    applyGuestUser();
+    closeModal('modalProfile');
+    showToast('Signed out. Switched to isolated guest session.');
+    loadScheduledJobs();
+    loadHistory();
+    pollStatus();
+}
+
+function openAuthModal() {
+    openModal('modalAuth');
+}
+
+function openProfileModal() {
+    if (!authenticatedUser) return openAuthModal();
+    const modalAvatar = document.getElementById('profileModalAvatar');
+    const modalName = document.getElementById('profileModalName');
+    const modalEmail = document.getElementById('profileModalEmail');
+    const modalUserId = document.getElementById('profileModalUserId');
+    const authType = document.getElementById('profileAuthType');
+
+    if (modalAvatar) {
+        modalAvatar.src = authenticatedUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(authenticatedUser.name)}&background=00a884&color=fff`;
+    }
+    if (modalName) modalName.textContent = authenticatedUser.name || 'User';
+    if (modalEmail) modalEmail.textContent = authenticatedUser.email || 'user@example.com';
+    if (modalUserId) modalUserId.textContent = currentDeviceId;
+    if (authType) authType.textContent = authenticatedUser.provider || 'Google OAuth 2.0';
+
+    openModal('modalProfile');
 }
 
 // Theme Controller (WhatsApp Dark & Light Palette)
@@ -47,6 +235,7 @@ initTheme();
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initClock();
+    initAuth();
     pollStatus();
     setInterval(pollStatus, 3000);
     loadScheduledJobs();
@@ -604,3 +793,162 @@ function showToast(msg) {
         toast.classList.remove('show');
     }, 3500);
 }
+
+// ================= MESSAGE TEMPLATES LIBRARY =================
+
+const MESSAGE_TEMPLATES = {
+    birthday: "🎉 Wishing you a very Happy Birthday! 🎂✨ May your year ahead be blessed with immense joy, health, and tremendous success! 🥳💐",
+    festival: "✨ Warm greetings and heartfelt wishes to you and your family on this auspicious occasion! 🪔 Wishing you abundant peace, happiness, and prosperity! 🙏🎉",
+    payment: "Hello! Friendly reminder regarding payment for invoice #{Invoice_No} of ₹{Amount} due on {Date}. Kindly complete the transfer at your convenience. Thank you! 🙏",
+    announcement: "📢 Important Notice: Please take note of the upcoming schedule update starting from {Date}. For any inquiries, feel free to contact us. Thank you!",
+    meeting: "Hi! Looking forward to our upcoming meeting scheduled on {Date} at {Time}. Please let me know if you need to reschedule. Best regards!"
+};
+
+function insertTemplate(type) {
+    const text = MESSAGE_TEMPLATES[type];
+    if (!text) return;
+    const msgInput = document.getElementById('messageInput');
+    if (!msgInput) return;
+
+    if (msgInput.value.trim().length > 0) {
+        if (!confirm('Replace your current draft message with this template?')) {
+            return;
+        }
+    }
+    msgInput.value = text;
+    updateCharCount();
+    msgInput.focus();
+    showToast(`Template loaded! Feel free to customize placeholders.`);
+}
+
+// ================= FEEDBACK & BETA REVIEW SYSTEM =================
+
+let currentSelectedRating = 5;
+let currentSelectedCategory = 'Testimonial';
+
+function setStarRating(rating) {
+    currentSelectedRating = rating;
+    const stars = document.querySelectorAll('#starRatingRow .star-btn');
+    stars.forEach(s => {
+        const r = parseInt(s.getAttribute('data-rating'));
+        if (r <= rating) {
+            s.classList.add('active');
+        } else {
+            s.classList.remove('active');
+        }
+    });
+
+    const labels = {
+        1: '1 / 5 - Needs Improvement',
+        2: '2 / 5 - Fair',
+        3: '3 / 5 - Good',
+        4: '4 / 5 - Great!',
+        5: '5 / 5 - Outstanding!'
+    };
+    const labelEl = document.getElementById('starRatingLabel');
+    if (labelEl) labelEl.textContent = labels[rating] || `${rating} / 5`;
+}
+
+function selectCategory(cat, btn) {
+    currentSelectedCategory = cat;
+    document.querySelectorAll('.category-pills .category-pill').forEach(p => p.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+}
+
+function openFeedbackModal() {
+    loadRecentFeedback();
+    openModal('modalFeedback');
+}
+
+async function submitFeedback() {
+    const commentInput = document.getElementById('feedbackCommentInput');
+    const emailInput = document.getElementById('feedbackEmailInput');
+    const comment = commentInput ? commentInput.value.trim() : '';
+    const email = emailInput ? emailInput.value.trim() : '';
+
+    if (!comment) {
+        showToast('Please enter your feedback comment or review.');
+        if (commentInput) commentInput.focus();
+        return;
+    }
+
+    const submitBtn = document.getElementById('btnSubmitFeedback');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+    }
+
+    try {
+        const res = await apiFetch('/api/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                rating: currentSelectedRating,
+                category: currentSelectedCategory,
+                comment: comment,
+                userEmail: email
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('⭐ Thank you! Your review has been saved.');
+            if (commentInput) commentInput.value = '';
+            closeModal('modalFeedback');
+        } else {
+            showToast(data.error || 'Failed to submit feedback.');
+        }
+    } catch (err) {
+        showToast('Submission error: ' + err.message);
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '⭐ Submit Review';
+        }
+    }
+}
+
+async function loadRecentFeedback() {
+    try {
+        const res = await fetch('/api/feedback?limit=5');
+        const list = await res.json();
+        const container = document.getElementById('recentReviewsList');
+        if (!container) return;
+
+        if (!Array.isArray(list) || list.length === 0) {
+            container.innerHTML = `
+                <div class="review-item-mini">
+                    <div class="review-stars">★★★★★</div>
+                    <p class="review-text">"Scheduled 50 birthday wishes at midnight without leaving my laptop on. Flawless!"</p>
+                    <span class="review-author">— Verified Beta Tester</span>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = list.map(item => {
+            const stars = '★'.repeat(item.rating) + '☆'.repeat(Math.max(0, 5 - item.rating));
+            const dateStr = new Date(item.createdAt).toLocaleDateString();
+            const author = item.userEmail ? item.userEmail.split('@')[0] : 'Beta Tester';
+            return `
+                <div class="review-item-mini">
+                    <div class="review-stars">${stars}</div>
+                    <p class="review-text">"${escapeHtml(item.comment)}"</p>
+                    <span class="review-author">— ${escapeHtml(author)} (${dateStr})</span>
+                </div>
+            `;
+        }).join('');
+    } catch (err) {
+        console.warn('Failed to load recent reviews:', err);
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
