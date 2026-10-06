@@ -23,10 +23,10 @@
             </div>
 
             <div class="nav-controls">
-                <div class="workspace-pill">
-                    <span class="ws-icon">👤</span>
-                    <span id="displayWorkspaceId" class="ws-name">User #1</span>
-                    <button class="ws-switch-btn" onclick="promptSwitchWorkspace()" title="Switch Workspace">Switch</button>
+                <div class="device-pill" onclick="openPrivacyModal()" title="Isolated Device Session (Click for Privacy Info)">
+                    <span class="device-dot"></span>
+                    <span class="device-name">🔒 Private Session</span>
+                    <span class="device-info-btn">ℹ️</span>
                 </div>
                 <div id="liveClock" class="clock-badge">🕒 00:00:00</div>
                 <div id="connectionStatusBadge" class="status-badge disconnected">
@@ -136,7 +136,7 @@
                         <p class="ready-desc">You are all set to broadcast or schedule automated messages.</p>
                         <div class="btn-group">
                             <button id="btnProceedCompose" class="primary-btn" onclick="switchTab('compose')">🚀 Go to Compose Message</button>
-                            <button id="btnLogout" class="danger-outline-btn" onclick="logoutWhatsApp()">Logout / Disconnect</button>
+                            <button id="btnLogout" class="danger-outline-btn" onclick="openLogoutModal()">Logout / Disconnect</button>
                         </div>
                     </div>
                 </div>
@@ -255,7 +255,7 @@
 
                         <!-- Dispatch Trigger Button -->
                         <div class="dispatch-action-row">
-                            <button id="btnDispatch" class="primary-btn glow-btn" onclick="handleDispatch()">
+                            <button id="btnDispatch" class="primary-btn glow-btn" onclick="promptDispatchConfirm()">
                                 🚀 Send Message Now
                             </button>
                         </div>
@@ -304,6 +304,206 @@
             </section>
 
         </main>
+
+        <!-- ================= MODALS SYSTEM ================= -->
+
+        <!-- MODAL 1: Dispatch & Broadcast Confirmation -->
+        <div id="modalDispatchConfirm" class="modal-overlay" style="display: none;">
+            <div class="modal-container">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="modal-icon">🚀</span>
+                        <h3 id="dispatchModalTitle">Confirm Broadcast</h3>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeModal('modalDispatchConfirm')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-summary-grid">
+                        <div class="summary-chip">
+                            <span class="chip-label">Recipients:</span>
+                            <span id="dispatchModalRecipientCount" class="chip-val">0</span>
+                        </div>
+                        <div class="summary-chip">
+                            <span class="chip-label">Mode:</span>
+                            <span id="dispatchModalMode" class="chip-val">Instant Send</span>
+                        </div>
+                        <div class="summary-chip">
+                            <span class="chip-label">Dispatch Time:</span>
+                            <span id="dispatchModalTime" class="chip-val">Immediate</span>
+                        </div>
+                    </div>
+
+                    <div class="modal-preview-box">
+                        <span class="preview-label">Message Preview:</span>
+                        <div id="dispatchModalMessagePreview" class="preview-content"></div>
+                    </div>
+
+                    <div class="modal-alert-note">
+                        <span class="note-icon">🛡️</span>
+                        <span><strong>Anti-Ban Protection Active:</strong> Messages are sent with 3-second human-like intervals to safeguard your WhatsApp account.</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="secondary-btn" onclick="closeModal('modalDispatchConfirm')">Cancel</button>
+                    <button id="btnExecuteDispatch" class="primary-btn glow-btn" onclick="executeDispatchFromModal()">
+                        Confirm &amp; Send Now 🚀
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL 2: 8-Digit Pairing Code Display -->
+        <div id="modalPairingCode" class="modal-overlay" style="display: none;">
+            <div class="modal-container">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="modal-icon">🔢</span>
+                        <h3>WhatsApp 8-Digit Code</h3>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeModal('modalPairingCode')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-sub">Enter this 8-digit verification code directly inside your WhatsApp app:</p>
+                    
+                    <div class="big-code-card">
+                        <div id="modalDisplayPairingCode" class="modal-code-digits">---- ----</div>
+                        <button class="secondary-btn copy-btn" onclick="copyPairingCodeFromModal()">📋 Copy Code</button>
+                    </div>
+
+                    <div class="modal-pairing-steps">
+                        <h4>👉 Quick Steps to Link:</h4>
+                        <ol>
+                            <li>Open <strong>WhatsApp</strong> on your mobile phone.</li>
+                            <li>Go to <strong>Settings</strong> (or ⋮ Menu) &gt; <strong>Linked Devices</strong> &gt; <strong>Link a device</strong>.</li>
+                            <li>Tap <strong>"Link with phone number instead"</strong> at the bottom.</li>
+                            <li>Enter the 8-digit code shown above! ✅</li>
+                        </ol>
+                    </div>
+
+                    <div class="pulse-waiting-bar">
+                        <span class="pulse-dot"></span>
+                        <span>Waiting for connection... Auto-detecting WhatsApp.</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="primary-btn" onclick="closeModal('modalPairingCode')">Done / I Have Entered Code</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL 3: Logout / Disconnect Confirmation -->
+        <div id="modalLogoutConfirm" class="modal-overlay" style="display: none;">
+            <div class="modal-container modal-compact">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="modal-icon danger-icon">⚠️</span>
+                        <h3>Disconnect WhatsApp?</h3>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeModal('modalLogoutConfirm')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-confirm-desc">Are you sure you want to disconnect WhatsApp from this device? All local session tokens and pairing credentials will be safely wiped.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="secondary-btn" onclick="closeModal('modalLogoutConfirm')">Keep Connected</button>
+                    <button class="danger-btn" onclick="confirmLogoutFromModal()">Yes, Disconnect</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL 4: Task & Message Details -->
+        <div id="modalDetails" class="modal-overlay" style="display: none;">
+            <div class="modal-container modal-large">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="modal-icon">📋</span>
+                        <h3 id="detailsModalTitle">Task Details</h3>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeModal('modalDetails')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="modal-summary-grid">
+                        <div class="summary-chip">
+                            <span class="chip-label">Status:</span>
+                            <span id="detailsModalStatus" class="chip-val">-</span>
+                        </div>
+                        <div class="summary-chip">
+                            <span class="chip-label">Time:</span>
+                            <span id="detailsModalTime" class="chip-val">-</span>
+                        </div>
+                        <div class="summary-chip">
+                            <span class="chip-label">Recipients:</span>
+                            <span id="detailsModalRecipientCount" class="chip-val">0</span>
+                        </div>
+                    </div>
+
+                    <div class="modal-preview-box">
+                        <span class="preview-label">Full Message Content:</span>
+                        <div id="detailsModalMessage" class="preview-content"></div>
+                    </div>
+
+                    <div class="recipients-breakdown">
+                        <span class="preview-label">Recipients Breakdown:</span>
+                        <div id="detailsModalRecipientsList" class="recipients-list-wrap">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div id="detailsModalCustomAction"></div>
+                    <button class="secondary-btn" onclick="closeModal('modalDetails')">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL 5: Privacy & Security Architecture -->
+        <div id="modalPrivacy" class="modal-overlay" style="display: none;">
+            <div class="modal-container">
+                <div class="modal-header">
+                    <div class="modal-title-wrap">
+                        <span class="modal-icon">🛡️</span>
+                        <h3>100% Zero-Knowledge Device Privacy</h3>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeModal('modalPrivacy')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-sub">Har device ka alag private account hota hai — koi data leak ya sharing nahi hoti:</p>
+                    <div class="privacy-modal-grid">
+                        <div class="priv-box">
+                            <span class="priv-icon">📱</span>
+                            <div>
+                                <h5>Device-Isolated Session</h5>
+                                <p>Aapka session sirf aapke device/browser me exist karta hai. Dusre phone ya computer par koi aapka WhatsApp nahi dekh sakta.</p>
+                            </div>
+                        </div>
+                        <div class="priv-box">
+                            <span class="priv-icon">🚫</span>
+                            <div>
+                                <h5>Zero Chat Snooping</h5>
+                                <p>Hum aapke chats, contacts ya photos kabhi read nahi karte. Server sirf aapke bole hue messages ko dispatch karta hai.</p>
+                            </div>
+                        </div>
+                        <div class="priv-box">
+                            <span class="priv-icon">🔐</span>
+                            <div>
+                                <h5>Official Multi-Device Protocol</h5>
+                                <p>Ye wahi technology use karta hai jo WhatsApp Web official browser me karta hai. Koi password ya OTP required nahi hai.</p>
+                            </div>
+                        </div>
+                        <div class="priv-box">
+                            <span class="priv-icon">🛑</span>
+                            <div>
+                                <h5>Full Disconnect Control</h5>
+                                <p>Aap apne phone ke WhatsApp me jaakar "Linked Devices" se kisi bhi waqt 1 click me ise revoke/logout kar sakte hain.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="primary-btn" onclick="closeModal('modalPrivacy')">Got it, Keep Safe 👍</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Toast Notifications -->
         <div id="toastNotification" class="toast"></div>
