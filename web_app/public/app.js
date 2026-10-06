@@ -19,8 +19,33 @@ function apiFetch(url, options = {}) {
     return fetch(url, options);
 }
 
+// Theme Controller (WhatsApp Dark & Light Palette)
+function initTheme() {
+    const savedTheme = localStorage.getItem('automate_theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcon(savedTheme);
+}
+
+function toggleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    const nextTheme = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    localStorage.setItem('automate_theme', nextTheme);
+    updateThemeIcon(nextTheme);
+    showToast(`Switched to WhatsApp ${nextTheme === 'dark' ? 'Dark' : 'Light'} Mode`);
+}
+
+function updateThemeIcon(theme) {
+    const icon = document.getElementById('themeToggleIcon');
+    if (icon) {
+        icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    }
+}
+initTheme();
+
 // Initialize Application
 document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
     initClock();
     pollStatus();
     setInterval(pollStatus, 3000);

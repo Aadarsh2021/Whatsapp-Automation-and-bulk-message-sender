@@ -1,23 +1,42 @@
-# Node.js dependencies
-node_modules/
-web_app/node_modules/
+# ==========================================
+# AutoMate Pro & Cloud - Git Ignore Rules
+# ==========================================
+
+# 1. Environment Secrets & API Keys (CRITICAL: NEVER COMMIT)
+.env
+.env.*
+*.env
+web_app/.env
+web_app/.env.*
+*.env.local
+*.env.production
+
+# 2. WhatsApp Private Session Keys & Auth Tokens (CRITICAL: NEVER COMMIT)
+session_data/
+web_app/session_data/
+*/session_data/
+auth_info_baileys/
+web_app/auth_info_baileys/
+*/auth_info_baileys/
+creds.json
+*/creds.json
+app-state-sync-key*
+pre-key*
+session*
+
+# 3. Dynamic Runtime Data & Logs
+data/
+web_app/data/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.env
-.env.*
-web_app/.env
-web_app/.env.*
 
-# WhatsApp Private Sessions & Data (NEVER commit credentials or logs)
-web_app/session_data/
-web_app/auth_info_baileys/
-session_data/
-auth_info_baileys/
-web_app/data/
-*.log
+# 4. Node.js Dependencies
+node_modules/
+web_app/node_modules/
 
-# Python & Build Artifacts
+# 5. Python Build & Compiled Artifacts
 __pycache__/
 *.pyc
 *.pyo
@@ -26,6 +45,11 @@ build/
 dist/
 *.spec
 
-# OS metadata
+# 6. IDE, OS & System Metadata
 .DS_Store
 Thumbs.db
+ehthumbs.db
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
