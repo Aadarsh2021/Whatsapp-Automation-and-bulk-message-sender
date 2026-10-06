@@ -1,0 +1,13 @@
+{
+  "name": "whatsapp-automation-and-bulk-message-sender",
+  "version": "1.0.0",
+  "description": "WhatsApp Desktop and Cloud Web App Automation with 24/7 Scheduling",
+  "main": "web_app/server.js",
+  "scripts": {
+    "build": "cd web_app && npm install",
+    "start": "node web_app/server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
