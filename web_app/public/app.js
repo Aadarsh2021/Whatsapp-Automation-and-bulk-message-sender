@@ -6,9 +6,7 @@ let cachedJobs = [];
 let cachedHistory = [];
 let authenticatedUser = null;
 
-// Supabase Cloud Auth Config
-const SUPABASE_URL = 'https://pnjoqcmqlmpnvvehkixr.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_aiUtzrjlXuJIzd-Vqcc8Ug_YGs33k1o';
+// Supabase Cloud Auth Config (Loaded dynamically from secure backend environment)
 let supabaseClient = null;
 
 // 1. Unique, Persistent Device Session ID (Every phone/PC gets its own private space)
@@ -27,10 +25,13 @@ function apiFetch(url, options = {}) {
 
 // ================= AUTHENTICATION & GOOGLE OAUTH =================
 
-function initAuth() {
-    if (window.supabase) {
-        try {
-            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+async function initAuth() {
+    try {
+        const res = await fetch('/api/auth/config');
+        const config = await res.json();
+
+        if (window.supabase && config.supabaseUrl && config.supabaseAnonKey) {
+            supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
             
             // Check active session
             supabaseClient.auth.getSession().then(({ data: { session } }) => {
@@ -63,11 +64,11 @@ function initAuth() {
                     applyGuestUser();
                 }
             });
-        } catch (e) {
-            console.warn('Supabase auth init notice:', e);
+        } else {
             checkSavedAuth();
         }
-    } else {
+    } catch (e) {
+        console.warn('Supabase auth init notice:', e);
         checkSavedAuth();
     }
 }

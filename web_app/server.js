@@ -527,8 +527,8 @@ app.get('/api/history', async (req, res) => {
 // Public Auth Configuration for Supabase Frontend OAuth
 app.get('/api/auth/config', (req, res) => {
     res.json({
-        supabaseUrl: process.env.SUPABASE_URL || 'https://pnjoqcmqlmpnvvehkixr.supabase.co',
-        supabaseAnonKey: process.env.SUPABASE_ANON_KEY || 'sb_publishable_aiUtzrjlXuJIzd-Vqcc8Ug_YGs33k1o'
+        supabaseUrl: process.env.SUPABASE_URL || '',
+        supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
     });
 });
 

@@ -4,16 +4,16 @@ const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pnjoqcmqlmpnvvehkixr.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || 'sb_publishable_aiUtzrjlXuJIzd-Vqcc8Ug_YGs33k1o';
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 
 let supabase = null;
-if (SUPABASE_KEY) {
+if (SUPABASE_KEY && SUPABASE_URL) {
     try {
         supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
             auth: { persistSession: false }
         });
-        console.log('⚡ Connected to Supabase Cloud Database (Project: pnjoqcmqlmpnvvehkixr)');
+        console.log('⚡ Connected to Supabase Cloud Database');
     } catch (err) {
         console.error('Supabase initialization error, falling back to local storage:', err.message);
     }
