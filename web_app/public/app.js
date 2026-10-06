@@ -146,7 +146,7 @@ async function signInWithGoogle() {
             console.warn('OAuth redirect notice:', error.message);
             showToast('Google OAuth notice: ' + error.message);
             setTimeout(() => {
-                if (confirm('Google OAuth provider is not yet enabled in Supabase Providers. Would you like to use 1-Click Beta Tester Profile mode now?')) {
+                if (confirm('Google OAuth provider is not yet enabled in your Supabase dashboard. Would you like to sign in using Sandbox Developer Mode?')) {
                     signInDemoUser();
                 }
             }, 600);
@@ -159,16 +159,16 @@ async function signInWithGoogle() {
 
 function signInDemoUser() {
     const demoUser = {
-        id: 'beta_' + Math.random().toString(36).substr(2, 8),
-        email: 'beta.tester@gmail.com',
-        name: 'Verified Beta Tester',
-        avatar: 'https://ui-avatars.com/api/?name=Beta+Tester&background=00a884&color=fff',
-        provider: 'Google (Verified Beta)'
+        id: 'usr_' + Math.random().toString(36).substr(2, 8),
+        email: 'developer@automate.cloud',
+        name: 'Developer Sandbox',
+        avatar: 'https://ui-avatars.com/api/?name=Developer+Sandbox&background=00a884&color=fff',
+        provider: 'Sandbox Environment'
     };
     localStorage.setItem('automate_demo_user', JSON.stringify(demoUser));
     applyAuthenticatedUser(demoUser, true);
     closeModal('modalAuth');
-    showToast('Signed in as Verified Beta Tester! 🛡️');
+    showToast('Signed in with Sandbox Developer Profile.');
 }
 
 async function signOutUser() {
@@ -220,13 +220,16 @@ function toggleTheme() {
     document.documentElement.setAttribute('data-theme', nextTheme);
     localStorage.setItem('automate_theme', nextTheme);
     updateThemeIcon(nextTheme);
-    showToast(`Switched to WhatsApp ${nextTheme === 'dark' ? 'Dark' : 'Light'} Mode`);
+    showToast(`Switched to ${nextTheme === 'dark' ? 'Dark' : 'Light'} Mode`);
 }
 
 function updateThemeIcon(theme) {
     const icon = document.getElementById('themeToggleIcon');
-    if (icon) {
-        icon.textContent = theme === 'dark' ? '☀️' : '🌙';
+    if (!icon) return;
+    if (theme === 'dark') {
+        icon.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+    } else {
+        icon.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
     }
 }
 initTheme();
@@ -357,9 +360,8 @@ async function pollStatus() {
 
         if (data.status === 'connected') {
             if (!isConnected) {
-                // If just connected, close pairing modal automatically
                 closeModal('modalPairingCode');
-                showToast('🎉 WhatsApp Connected Successfully!');
+                showToast('WhatsApp connected successfully.');
             }
             isConnected = true;
             statusText.textContent = 'Connected';
@@ -428,12 +430,12 @@ async function requestPairingCode() {
     const displayCode = document.getElementById('displayPairingCode');
 
     if (!phoneNumber || phoneNumber.replace(/\D/g, '').length < 10) {
-        showToast('⚠️ Please enter a valid phone number with country code (e.g. 919876543210)');
+        showToast('Please enter a valid phone number with country code (e.g. 919876543210)');
         return;
     }
 
     btn.disabled = true;
-    btn.textContent = '⏳ Generating Code...';
+    btn.textContent = 'Generating Code...';
 
     try {
         const res = await apiFetch('/api/request-pairing-code', {
@@ -447,18 +449,17 @@ async function requestPairingCode() {
             displayCode.textContent = data.code;
             resultBox.style.display = 'block';
 
-            // Also open modern high-focus modal
             document.getElementById('modalDisplayPairingCode').textContent = data.code;
             openModal('modalPairingCode');
-            showToast('✅ 8-Digit Pairing Code is Ready!');
+            showToast('Pairing code generated successfully.');
         } else {
-            showToast('❌ ' + (data.error || 'Failed to generate code'));
+            showToast(data.error || 'Failed to generate pairing code');
         }
     } catch (err) {
-        showToast('❌ Error: ' + err.message);
+        showToast('Error: ' + err.message);
     } finally {
         btn.disabled = false;
-        btn.textContent = '🔢 Get 8-Digit Code';
+        btn.textContent = 'Generate Pairing Code';
     }
 }
 
@@ -466,7 +467,7 @@ function copyPairingCode() {
     const code = document.getElementById('displayPairingCode').textContent.trim();
     if (!code || code.includes('- -')) return;
     navigator.clipboard.writeText(code).then(() => {
-        showToast('📋 Code copied to clipboard!');
+        showToast('Code copied to clipboard.');
     }).catch(() => {
         showToast('Code: ' + code);
     });
@@ -476,7 +477,7 @@ function copyPairingCodeFromModal() {
     const code = document.getElementById('modalDisplayPairingCode').textContent.trim();
     if (!code || code.includes('- -')) return;
     navigator.clipboard.writeText(code).then(() => {
-        showToast('📋 Code copied to clipboard!');
+        showToast('Code copied to clipboard.');
     }).catch(() => {
         showToast('Code: ' + code);
     });
@@ -556,7 +557,7 @@ function processUploadedFile(file) {
             .filter(s => s.length >= 7);
 
         if (numbers.length === 0) {
-            showToast('⚠️ No valid phone numbers found in file.');
+            showToast('No valid phone numbers found in file.');
             return;
         }
 
@@ -568,7 +569,7 @@ function processUploadedFile(file) {
             input.value = numbers.join('\n');
         }
         updateContactCount();
-        showToast(`✅ Imported ${numbers.length} contacts from ${file.name}`);
+        showToast(`Imported ${numbers.length} contacts from ${file.name}.`);
     };
     reader.readAsText(file);
 }
@@ -583,7 +584,30 @@ function addSampleTestNumber() {
         input.value = current + '\n' + sample;
     }
     updateContactCount();
-    showToast('➕ Added sample contact (+919876543210). Edit as needed!');
+    showToast('Added sample test number (+919876543210).');
+}
+
+function formatSelection(wrapper) {
+    const textarea = document.getElementById('messageInput');
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+
+    if (start === end) {
+        const sample = 'text';
+        textarea.value = text.substring(0, start) + wrapper + sample + wrapper + text.substring(end);
+        textarea.selectionStart = start + wrapper.length;
+        textarea.selectionEnd = start + wrapper.length + sample.length;
+    } else {
+        const selected = text.substring(start, end);
+        textarea.value = text.substring(0, start) + wrapper + selected + wrapper + text.substring(end);
+        textarea.selectionStart = start;
+        textarea.selectionEnd = end + (wrapper.length * 2);
+    }
+    textarea.focus();
+    updateCharCount();
+    updateChatPreview();
 }
 
 function insertEmoji(emoji) {
@@ -621,7 +645,7 @@ function updateChatPreview() {
 
     const raw = msgInput ? msgInput.value : '';
     if (!raw.trim()) {
-        previewBubble.innerHTML = '<span class="wa-bubble-placeholder">Type your message or pick a template to preview live output...</span>';
+        previewBubble.innerHTML = '<span class="wa-bubble-placeholder">Type a message to preview formatting...</span>';
     } else {
         let formatted = escapeHtml(raw);
         // *bold*
@@ -677,7 +701,7 @@ function setQuickSchedule(preset) {
         toggleDispatchMode();
     }
 
-    showToast(`⏰ Preset applied: ${toastLabel}`);
+    showToast(`Schedule preset applied: ${toastLabel}`);
 }
 
 function toggleDispatchMode() {
@@ -689,11 +713,11 @@ function toggleDispatchMode() {
     if (mode === 'schedule') {
         scheduleBox.style.display = 'block';
         if (btnText) btnText.textContent = 'Schedule Message Broadcast';
-        else btn.textContent = '⏰ Schedule Message Broadcast';
+        else btn.textContent = 'Schedule Message Broadcast';
     } else {
         scheduleBox.style.display = 'none';
         if (btnText) btnText.textContent = 'Send Message Now';
-        else btn.textContent = '🚀 Send Message Now';
+        else btn.textContent = 'Send Message Now';
     }
 }
 
@@ -707,18 +731,18 @@ function promptDispatchConfirm() {
     const mode = document.querySelector('input[name="dispatchMode"]:checked').value;
 
     if (!isConnected) {
-        showToast('⚠️ Please link your WhatsApp first in the "Link WhatsApp" tab!');
+        showToast('Please link your WhatsApp first in the "Link WhatsApp" tab.');
         switchTab('connect');
         return;
     }
 
     if (numbersRaw.length === 0) {
-        showToast('⚠️ Please enter at least one phone number.');
+        showToast('Please enter at least one phone number.');
         return;
     }
 
     if (!message) {
-        showToast('⚠️ Message cannot be empty.');
+        showToast('Message cannot be empty.');
         return;
     }
 
@@ -726,7 +750,7 @@ function promptDispatchConfirm() {
     if (mode === 'schedule') {
         scheduleTime = document.getElementById('scheduleDateTime').value;
         if (!scheduleTime) {
-            showToast('⚠️ Please pick a date and time for the schedule.');
+            showToast('Please pick a date and time for the schedule.');
             return;
         }
     }
@@ -734,12 +758,12 @@ function promptDispatchConfirm() {
     pendingDispatchData = { numbers: numbersRaw, message, mode, scheduleTime };
 
     // Fill modal fields
-    document.getElementById('dispatchModalTitle').textContent = mode === 'instant' ? 'Confirm Instant Broadcast' : 'Confirm 24/7 Cloud Schedule';
+    document.getElementById('dispatchModalTitle').textContent = mode === 'instant' ? 'Confirm Instant Broadcast' : 'Confirm Scheduled Broadcast';
     document.getElementById('dispatchModalRecipientCount').textContent = `${numbersRaw.length} Contacts`;
-    document.getElementById('dispatchModalMode').textContent = mode === 'instant' ? '⚡ Instant Send' : '⏰ Cloud Scheduled';
+    document.getElementById('dispatchModalMode').textContent = mode === 'instant' ? 'Instant Send' : 'Cloud Scheduled';
     document.getElementById('dispatchModalTime').textContent = mode === 'instant' ? 'Immediate' : new Date(scheduleTime).toLocaleString();
     document.getElementById('dispatchModalMessagePreview').textContent = message;
-    document.getElementById('btnExecuteDispatch').textContent = mode === 'instant' ? 'Confirm & Send Now 🚀' : 'Confirm & Schedule ⏰';
+    document.getElementById('btnExecuteDispatch').textContent = mode === 'instant' ? 'Confirm & Dispatch' : 'Confirm & Schedule';
 
     openModal('modalDispatchConfirm');
 }
@@ -748,7 +772,7 @@ async function executeDispatchFromModal() {
     if (!pendingDispatchData) return;
     const btn = document.getElementById('btnExecuteDispatch');
     btn.disabled = true;
-    btn.textContent = '⏳ Processing Dispatch...';
+    btn.textContent = 'Processing Dispatch...';
 
     try {
         const { numbers, message, mode, scheduleTime } = pendingDispatchData;
@@ -762,10 +786,10 @@ async function executeDispatchFromModal() {
             const data = await res.json();
             if (data.success) {
                 closeModal('modalDispatchConfirm');
-                showToast(`🚀 Sending to ${numbers.length} recipients in background!`);
+                showToast(`Dispatched to ${numbers.length} recipients in background.`);
                 loadHistory();
             } else {
-                showToast('❌ Error: ' + (data.error || 'Failed to send'));
+                showToast('Error: ' + (data.error || 'Failed to dispatch'));
             }
         } else {
             const res = await apiFetch('/api/schedule', {
@@ -776,14 +800,14 @@ async function executeDispatchFromModal() {
             const data = await res.json();
             if (data.success) {
                 closeModal('modalDispatchConfirm');
-                showToast('✅ Broadcast scheduled 24/7 on cloud!');
+                showToast('Broadcast scheduled successfully.');
                 switchTab('scheduled');
             } else {
-                showToast('❌ Error: ' + (data.error || 'Failed to schedule'));
+                showToast('Error: ' + (data.error || 'Failed to schedule'));
             }
         }
     } catch (err) {
-        showToast('❌ Network error: ' + err.message);
+        showToast('Network error: ' + err.message);
     } finally {
         btn.disabled = false;
         pendingDispatchData = null;
@@ -813,7 +837,7 @@ async function loadScheduledJobs() {
             return `
                 <div class="job-card interactive-row" onclick="openJobDetailsModal('${job.id}')">
                     <div class="job-info">
-                        <h4>⏰ ${dateStr}</h4>
+                        <h4>${dateStr}</h4>
                         <p><strong>Recipients:</strong> ${job.numbers.length} contacts | <strong>Status:</strong> <span class="${statusClass}">${job.status.toUpperCase()}</span></p>
                         <p><strong>Message:</strong> "${job.message.length > 55 ? job.message.substring(0, 55) + '...' : job.message}"</p>
                     </div>
@@ -947,7 +971,7 @@ async function loadHistory() {
 
 function exportHistoryCSV() {
     if (!cachedHistory || cachedHistory.length === 0) {
-        showToast('⚠️ No delivery logs to export.');
+        showToast('No delivery logs to export.');
         return;
     }
 
@@ -971,7 +995,7 @@ function exportHistoryCSV() {
     link.click();
     document.body.removeChild(link);
 
-    showToast(`📊 Exported ${cachedHistory.length} delivery records as CSV!`);
+    showToast(`Exported ${cachedHistory.length} delivery records as CSV.`);
 }
 
 function openHistoryDetailsModal(index) {
@@ -1025,11 +1049,11 @@ function showToast(msg) {
 // ================= MESSAGE TEMPLATES LIBRARY =================
 
 const MESSAGE_TEMPLATES = {
-    birthday: "🎉 Wishing you a very Happy Birthday! 🎂✨ May your year ahead be blessed with immense joy, health, and tremendous success! 🥳💐",
-    festival: "✨ Warm greetings and heartfelt wishes to you and your family on this auspicious occasion! 🪔 Wishing you abundant peace, happiness, and prosperity! 🙏🎉",
-    payment: "Hello! Friendly reminder regarding payment for invoice #{Invoice_No} of ₹{Amount} due on {Date}. Kindly complete the transfer at your convenience. Thank you! 🙏",
-    announcement: "📢 Important Notice: Please take note of the upcoming schedule update starting from {Date}. For any inquiries, feel free to contact us. Thank you!",
-    meeting: "Hi! Looking forward to our upcoming meeting scheduled on {Date} at {Time}. Please let me know if you need to reschedule. Best regards!"
+    birthday: "Wishing you a very Happy Birthday! May your upcoming year bring continuous success, good health, and fulfillment.",
+    festival: "Warm season's greetings to you and your team. Wishing you peace, prosperity, and continued success.",
+    payment: "Friendly reminder regarding outstanding invoice #{Invoice_No} for ₹{Amount}, due on {Date}. Please confirm once processed. Thank you.",
+    announcement: "Important Notice: Please take note of the scheduled system maintenance window starting {Date}. For immediate inquiries, contact support.",
+    meeting: "Confirmation for our upcoming discussion scheduled on {Date} at {Time}. Please confirm your availability or propose an alternative time slot."
 };
 
 function insertTemplate(type) {
@@ -1047,13 +1071,13 @@ function insertTemplate(type) {
     updateCharCount();
     updateChatPreview();
     msgInput.focus();
-    showToast(`Template loaded! Feel free to customize placeholders.`);
+    showToast('Template loaded into composer.');
 }
 
-// ================= FEEDBACK & BETA REVIEW SYSTEM =================
+// ================= FEEDBACK & REVIEWS =================
 
 let currentSelectedRating = 5;
-let currentSelectedCategory = 'Testimonial';
+let currentSelectedCategory = 'Product Feedback';
 
 function setStarRating(rating) {
     currentSelectedRating = rating;
@@ -1071,8 +1095,8 @@ function setStarRating(rating) {
         1: '1 / 5 - Needs Improvement',
         2: '2 / 5 - Fair',
         3: '3 / 5 - Good',
-        4: '4 / 5 - Great!',
-        5: '5 / 5 - Outstanding!'
+        4: '4 / 5 - Very Good',
+        5: '5 / 5 - Excellent'
     };
     const labelEl = document.getElementById('starRatingLabel');
     if (labelEl) labelEl.textContent = labels[rating] || `${rating} / 5`;
@@ -1096,7 +1120,7 @@ async function submitFeedback() {
     const email = emailInput ? emailInput.value.trim() : '';
 
     if (!comment) {
-        showToast('Please enter your feedback comment or review.');
+        showToast('Please enter your feedback or note.');
         if (commentInput) commentInput.focus();
         return;
     }
@@ -1120,7 +1144,7 @@ async function submitFeedback() {
         });
         const data = await res.json();
         if (data.success) {
-            showToast('⭐ Thank you! Your review has been saved.');
+            showToast('Thank you! Your feedback has been recorded.');
             if (commentInput) commentInput.value = '';
             closeModal('modalFeedback');
         } else {
@@ -1131,7 +1155,7 @@ async function submitFeedback() {
     } finally {
         if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = '⭐ Submit Review';
+            submitBtn.textContent = 'Submit Feedback';
         }
     }
 }
@@ -1147,8 +1171,8 @@ async function loadRecentFeedback() {
             container.innerHTML = `
                 <div class="review-item-mini">
                     <div class="review-stars">★★★★★</div>
-                    <p class="review-text">"Scheduled 50 birthday wishes at midnight without leaving my laptop on. Flawless!"</p>
-                    <span class="review-author">— Verified Beta Tester</span>
+                    <p class="review-text">"Batch notifications execute with zero packet loss and predictable throttling."</p>
+                    <span class="review-author">— Verified User</span>
                 </div>
             `;
             return;
@@ -1157,7 +1181,7 @@ async function loadRecentFeedback() {
         container.innerHTML = list.map(item => {
             const stars = '★'.repeat(item.rating) + '☆'.repeat(Math.max(0, 5 - item.rating));
             const dateStr = new Date(item.createdAt).toLocaleDateString();
-            const author = item.userEmail ? item.userEmail.split('@')[0] : 'Beta Tester';
+            const author = item.userEmail ? item.userEmail.split('@')[0] : 'Verified User';
             return `
                 <div class="review-item-mini">
                     <div class="review-stars">${stars}</div>

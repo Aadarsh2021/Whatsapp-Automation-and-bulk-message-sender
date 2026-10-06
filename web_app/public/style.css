@@ -1093,26 +1093,48 @@ body {
     height: 160px;
 }
 
-.emoji-toolbar {
+.formatting-toolbar {
     display: flex;
-    gap: 6px;
+    align-items: center;
+    gap: 4px;
     margin-bottom: 10px;
-    overflow-x: auto;
-    padding-bottom: 4px;
-}
-
-.emoji-toolbar button {
-    background: var(--hover-bg);
+    padding: 4px 8px;
+    background: var(--input-bg);
     border: 1px solid var(--card-border);
     border-radius: 8px;
-    padding: 6px 10px;
-    font-size: 15px;
-    cursor: pointer;
-    transition: transform 0.1s, background 0.2s;
 }
 
-.emoji-toolbar button:hover {
-    transform: scale(1.15);
+.formatting-toolbar .format-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.formatting-toolbar .format-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+    border-color: var(--card-border);
+}
+
+.formatting-toolbar .format-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--card-border);
+    margin: 0 4px;
+}
+
+.formatting-toolbar .format-hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-left: auto;
 }
 
 .char-counter {
