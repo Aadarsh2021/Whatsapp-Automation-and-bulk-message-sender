@@ -104,6 +104,12 @@ function applyAuthenticatedUser(user, reloadData = true) {
         nameSpan.textContent = user.name || 'User';
     }
 
+    // Unlock WhatsApp Connect section
+    const authGate = document.getElementById('authRequiredGate');
+    const connectContent = document.getElementById('authenticatedConnectBox');
+    if (authGate) authGate.style.display = 'none';
+    if (connectContent) connectContent.style.display = 'block';
+
     const fbEmail = document.getElementById('feedbackEmailInput');
     if (fbEmail && !fbEmail.value && user.email) {
         fbEmail.value = user.email;
@@ -129,6 +135,17 @@ function applyGuestUser() {
     const profileBadge = document.getElementById('userProfileBadge');
     if (authBtn) authBtn.style.display = 'inline-flex';
     if (profileBadge) profileBadge.style.display = 'none';
+
+    // Lock WhatsApp QR / pairing code controls behind Google Sign-in Gate
+    const authGate = document.getElementById('authRequiredGate');
+    const connectContent = document.getElementById('authenticatedConnectBox');
+    if (authGate) authGate.style.display = 'flex';
+    if (connectContent) connectContent.style.display = 'none';
+
+    const statusBadge = document.getElementById('connectionStatusBadge');
+    const statusText = document.getElementById('statusText');
+    if (statusBadge) statusBadge.className = 'status-badge disconnected';
+    if (statusText) statusText.textContent = 'Login Required';
 }
 
 async function signInWithGoogle() {
@@ -345,6 +362,19 @@ function switchTab(tabName) {
 // ================= STATUS & QR POLLING =================
 
 async function pollStatus() {
+    // Strict Gate: Do not query WhatsApp sessions or generate QR if user is not signed in
+    if (!authenticatedUser) {
+        const badge = document.getElementById('connectionStatusBadge');
+        const statusText = document.getElementById('statusText');
+        if (badge) badge.className = 'status-badge disconnected';
+        if (statusText) statusText.textContent = 'Login Required';
+        const authGate = document.getElementById('authRequiredGate');
+        const connectContent = document.getElementById('authenticatedConnectBox');
+        if (authGate) authGate.style.display = 'flex';
+        if (connectContent) connectContent.style.display = 'none';
+        return;
+    }
+
     try {
         const res = await apiFetch('/api/status');
         const data = await res.json();
@@ -355,6 +385,17 @@ async function pollStatus() {
         const connectedBox = document.getElementById('connectedStateBox');
         const qrImage = document.getElementById('qrImage');
         const qrLoading = document.getElementById('qrLoading');
+
+        if (data.status === 'auth_required') {
+            isConnected = false;
+            if (badge) badge.className = 'status-badge disconnected';
+            if (statusText) statusText.textContent = 'Login Required';
+            const authGate = document.getElementById('authRequiredGate');
+            const connectContent = document.getElementById('authenticatedConnectBox');
+            if (authGate) authGate.style.display = 'flex';
+            if (connectContent) connectContent.style.display = 'none';
+            return;
+        }
 
         badge.className = 'status-badge ' + data.status;
 
@@ -411,6 +452,12 @@ function switchLinkMethod(method) {
 }
 
 async function requestPairingCode() {
+    if (!authenticatedUser) {
+        showToast('Please sign in with Google to generate a WhatsApp pairing code.');
+        openAuthModal();
+        return;
+    }
+
     const phoneInput = document.getElementById('pairingPhoneInput');
     const phoneNumber = phoneInput.value.trim();
     const btn = document.getElementById('btnGetPairingCode');
@@ -712,6 +759,12 @@ function toggleDispatchMode() {
 // ================= DISPATCH CONFIRMATION MODAL =================
 
 function promptDispatchConfirm() {
+    if (!authenticatedUser) {
+        showToast('Please sign in with Google to broadcast or schedule messages.');
+        openAuthModal();
+        return;
+    }
+
     const numbersRaw = document.getElementById('numbersInput').value.split('\n')
         .map(n => n.trim())
         .filter(n => n.length > 0);

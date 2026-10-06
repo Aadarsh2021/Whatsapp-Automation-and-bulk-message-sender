@@ -349,6 +349,19 @@ app.get('/api/keepalive/render', (req, res) => {
 // User Session Status
 app.get('/api/status', (req, res) => {
     const userId = getUserId(req);
+
+    // Strict Gate: Baileys WhatsApp sessions require verified Google authentication (usr_*)
+    if (!userId.startsWith('usr_')) {
+        return res.json({
+            userId,
+            status: 'auth_required',
+            qrCode: null,
+            user: null,
+            supabaseActive: db.isSupabaseConnected(),
+            message: 'Sign in with Google required before initiating WhatsApp session.'
+        });
+    }
+
     const session = getOrCreateSession(userId);
     res.json({
         userId,
@@ -362,6 +375,11 @@ app.get('/api/status', (req, res) => {
 // Request 8-Digit Pairing Code
 app.post('/api/request-pairing-code', async (req, res) => {
     const userId = getUserId(req);
+
+    if (!userId.startsWith('usr_')) {
+        return res.status(401).json({ error: 'Google login is required to generate a WhatsApp pairing code.' });
+    }
+
     const session = getOrCreateSession(userId);
     const { phoneNumber } = req.body;
 
@@ -440,6 +458,11 @@ app.post('/api/wipe-data', async (req, res) => {
 // Send Now
 app.post('/api/send-now', async (req, res) => {
     const userId = getUserId(req);
+
+    if (!userId.startsWith('usr_')) {
+        return res.status(401).json({ error: 'Google login is required to send messages.' });
+    }
+
     const session = sessions.get(userId);
     const { numbers, message } = req.body;
 
@@ -465,6 +488,11 @@ app.post('/api/send-now', async (req, res) => {
 // Schedule Message
 app.post('/api/schedule', async (req, res) => {
     const userId = getUserId(req);
+
+    if (!userId.startsWith('usr_')) {
+        return res.status(401).json({ error: 'Google login is required to schedule messages.' });
+    }
+
     const { numbers, message, scheduleTime } = req.body;
 
     if (!numbers || !Array.isArray(numbers) || numbers.length === 0) {

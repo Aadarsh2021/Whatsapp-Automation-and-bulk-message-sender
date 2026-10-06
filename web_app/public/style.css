@@ -2260,3 +2260,64 @@ body {
     color: var(--text-muted);
 }
 
+/* ================================================================
+   Authentication Required Gate (Mandatory Google Sign-in to link)
+   ================================================================ */
+.auth-gate-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 38px 20px 30px;
+}
+
+.auth-gate-icon-wrap {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.auth-gate-title {
+    font-family: var(--font-heading);
+    font-size: 21px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    letter-spacing: -0.3px;
+}
+
+.auth-gate-desc {
+    max-width: 490px;
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 22px;
+}
+
+.auth-gate-pills {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 22px;
+}
+
+.auth-gate-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    padding: 5px 12px;
+    border-radius: 14px;
+}
+
