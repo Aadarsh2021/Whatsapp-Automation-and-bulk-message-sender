@@ -1,0 +1,32 @@
+name: 24/7 Cloud Keep-Alive (Render & Supabase)
+
+on:
+  schedule:
+    # Run every 10 minutes to prevent Render 15-minute idle spin-down and Supabase 7-day pause
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual on-demand trigger from GitHub UI
+
+jobs:
+  keep-alive:
+    name: Ping Render & Supabase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Keep Render Awake (Reset 15-Min Idle Timer)
+        run: |
+          echo "Pinging AutoMate Cloud Web Service on Render..."
+          RENDER_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://whatsapp-automation-and-bulk-message.onrender.com/api/health")
+          echo "Render Health API Response: HTTP $RENDER_CODE"
+          if [ "$RENDER_CODE" -eq 200 ]; then
+            echo "Render instance is active and awake."
+          else
+            echo "Wake-up ping sent (HTTP $RENDER_CODE)."
+          fi
+
+      - name: Supabase Heartbeat (Reset 7-Day Inactivity Pause)
+        run: |
+          echo "Triggering Supabase Database Heartbeat..."
+          SB_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://whatsapp-automation-and-bulk-message.onrender.com/api/keepalive/supabase")
+          echo "Supabase Heartbeat API Response: HTTP $SB_CODE"
+          if [ "$SB_CODE" -eq 200 ]; then
+            echo "Supabase 7-day pause timer reset successfully."
+          fi

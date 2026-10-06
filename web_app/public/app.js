@@ -241,6 +241,8 @@ document.addEventListener('DOMContentLoaded', () => {
     initAuth();
     pollStatus();
     setInterval(pollStatus, 3000);
+    pollHealthMetrics();
+    setInterval(pollHealthMetrics, 20000);
     loadScheduledJobs();
     loadHistory();
     updateChatPreview();
@@ -398,6 +400,30 @@ async function pollStatus() {
         }
     } catch (err) {
         console.error('Failed to poll status:', err);
+    }
+}
+
+async function pollHealthMetrics() {
+    try {
+        const res = await fetch('/api/health');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const renderCell = document.getElementById('metricRenderKeepAlive');
+        if (renderCell && data.render) {
+            renderCell.textContent = data.render.status === 'awake'
+                ? `24/7 Active (Pings: ${data.render.totalPings || 0})`
+                : '24/7 Active (10m Ping)';
+        }
+
+        const sbCell = document.getElementById('metricSupabaseHeartbeat');
+        if (sbCell && data.supabase) {
+            sbCell.textContent = data.supabase.connected
+                ? `Active (Queries: ${data.supabase.queryCount || 0})`
+                : 'Local Mode';
+        }
+    } catch {
+        // silent fallback
     }
 }
 

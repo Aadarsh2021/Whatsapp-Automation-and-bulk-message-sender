@@ -149,7 +149,26 @@ For users who prefer a **100% offline, zero-server-dependency solution**:
    SUPABASE_URL=https://your-project.supabase.co
    SUPABASE_KEY=your-supabase-secret-key
    ```
-5. *(Optional)* Add a free cron monitor (e.g. [UptimeRobot](https://uptimerobot.com/)) pinging `https://your-app.onrender.com/api/health` every 10 minutes to prevent Render free-tier idling.
+5. **Automated 24/7 Uptime (Zero Configuration):**
+   * AutoMate includes an internal keep-alive agent that automatically pings `/api/health` every 10 minutes to reset Render's 15-minute idle timer.
+   * Supabase database queries run on a 6-hour heartbeat schedule to prevent Supabase's 7-day project inactivity pause.
+
+---
+
+## 🛡️ 24/7 Zero-Inactivity Engine (Render & Supabase Protection)
+
+Cloud free tiers enforce aggressive inactivity policies that normally break automated schedulers. AutoMate completely solves both limitations through a dual-layer architecture:
+
+| Problem | Cause | AutoMate Solution |
+| :--- | :--- | :--- |
+| **Render 15-Min Sleep** | Render Free Tier spins down web services after 15 minutes of inactivity, pausing midnight cron jobs. | **Layer 1:** Built-in Node.js Keep-Alive Agent pings `${RENDER_EXTERNAL_URL}/api/health` every 10 minutes.<br/>**Layer 2:** GitHub Actions workflow (`.github/workflows/keep_alive.yml`) sends external pings every 10 minutes for 100% cloud redundancy. |
+| **Supabase 7-Day Pause** | Supabase pauses free-tier PostgreSQL projects after 7 consecutive days of zero database queries. | **Layer 1:** Built-in Supabase Heartbeat in `db.js` probes the database every 6 hours (4 times daily), resetting the 7-day timer.<br/>**Layer 2:** Dedicated `/api/keepalive/supabase` endpoint allows automated external monitoring. |
+
+### Diagnostic & Keep-Alive Endpoints
+
+* **`GET /api/health`**: Returns comprehensive uptime, Render keep-alive status, Supabase heartbeat latency, active sessions, and memory stats.
+* **`GET /api/keepalive/supabase`**: Triggers an instant database heartbeat probe to Supabase and returns latency.
+* **`GET /api/keepalive/render`**: Dispatches an immediate keep-alive ping to the public Render URL.
 
 ---
 

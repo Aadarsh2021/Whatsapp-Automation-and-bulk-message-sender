@@ -249,17 +249,100 @@ setInterval(async () => {
     }
 }, 8000); // Ticks every 8 seconds
 
+// ================= RENDER KEEP-ALIVE AGENT =================
+// Prevents Render Free Tier from spinning down / sleeping after 15 minutes of inactivity.
+const RENDER_EXTERNAL_URL = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || 'https://whatsapp-automation-and-bulk-message.onrender.com';
+const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+
+let keepAlivePingCount = 0;
+let lastKeepAlivePing = null;
+let lastKeepAliveStatus = 'initialized';
+
+function triggerRenderPing() {
+    try {
+        const targetUrl = `${RENDER_EXTERNAL_URL.replace(/\/$/, '')}/api/health`;
+        const client = targetUrl.startsWith('https') ? require('https') : require('http');
+
+        const req = client.get(targetUrl, { timeout: 25000 }, (res) => {
+            keepAlivePingCount++;
+            lastKeepAlivePing = new Date().toISOString();
+            lastKeepAliveStatus = res.statusCode === 200 ? 'awake' : `status_${res.statusCode}`;
+            console.log(`🛡️ [Render Keep-Alive #${keepAlivePingCount}] Ping sent to ${targetUrl} (HTTP ${res.statusCode}). Spin-down prevented.`);
+        });
+
+        req.on('error', (err) => {
+            lastKeepAliveStatus = 'warning: ' + err.message;
+            console.warn(`⚠️ [Render Keep-Alive] Ping notice: ${err.message}`);
+        });
+
+        req.on('timeout', () => {
+            req.destroy();
+            lastKeepAliveStatus = 'timeout';
+        });
+    } catch (err) {
+        console.error('Render Keep-Alive trigger error:', err);
+    }
+}
+
+function startRenderKeepAliveAgent() {
+    console.log(`🛡️ [Render Keep-Alive] Armed. Pinging ${RENDER_EXTERNAL_URL}/api/health every 10 minutes to maintain 24/7 uptime.`);
+    // Initial ping after 20 seconds
+    setTimeout(triggerRenderPing, 20000);
+    // Recurring 10-minute ping loop
+    setInterval(triggerRenderPing, KEEP_ALIVE_INTERVAL_MS);
+}
+
 // ================= API ENDPOINTS =================
 
-// Health & Keep-Alive Endpoint (For UptimeRobot 24/7 pinging)
+// Comprehensive System Health & Diagnostics Endpoint
 app.get('/api/health', (req, res) => {
+    const sbInfo = db.getLastHeartbeatInfo();
     res.json({
         status: 'healthy',
+        uptimeSeconds: Math.round(process.uptime()),
         timestamp: new Date().toISOString(),
-        supabaseConnected: db.isSupabaseConnected(),
+        render: {
+            service: 'AutoMate Cloud',
+            externalUrl: RENDER_EXTERNAL_URL,
+            keepAliveAgent: 'active (10m loop)',
+            lastPing: lastKeepAlivePing,
+            totalPings: keepAlivePingCount,
+            status: lastKeepAliveStatus,
+            spinDownProtection: 'ENABLED'
+        },
+        supabase: {
+            connected: db.isSupabaseConnected(),
+            lastHeartbeat: sbInfo.lastHeartbeat,
+            heartbeatStatus: sbInfo.status,
+            queryCount: sbInfo.queryCount,
+            pauseProtection: 'ENABLED (6h probe loop)'
+        },
         activeSessions: sessions.size,
         activeWorkers,
         memoryUsageMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+    });
+});
+
+// Dedicated Supabase Keep-Alive Route (resets 7-day inactivity pause)
+app.get('/api/keepalive/supabase', async (req, res) => {
+    try {
+        const result = await db.pingSupabaseHeartbeat();
+        res.json(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Dedicated Render Keep-Alive Trigger Route
+app.get('/api/keepalive/render', (req, res) => {
+    triggerRenderPing();
+    res.json({
+        success: true,
+        message: 'Render keep-alive ping dispatched.',
+        targetUrl: RENDER_EXTERNAL_URL,
+        lastPing: lastKeepAlivePing,
+        totalPings: keepAlivePingCount,
+        status: lastKeepAliveStatus
     });
 });
 
@@ -491,5 +574,6 @@ app.get('/api/feedback', async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`🌐 AutoMate Resilient Cloud Server running on port ${PORT}`);
+    startRenderKeepAliveAgent();
 });
 

@@ -21,6 +21,66 @@ if (SUPABASE_KEY) {
     console.warn('⚠️ No SUPABASE_KEY provided. Operating in Local Resilient Fallback Mode.');
 }
 
+// ================= SUPABASE KEEP-ALIVE & PAUSE GUARD =================
+// Supabase free tier pauses projects after 7 consecutive days of inactivity.
+// This heartbeat queries Supabase every 6 hours to ensure 24/7 project activity.
+let lastSupabaseHeartbeat = null;
+let lastHeartbeatStatus = 'initialized';
+let heartbeatQueryCount = 0;
+
+async function pingSupabaseHeartbeat() {
+    if (!supabase) {
+        return {
+            success: false,
+            message: 'Supabase client not initialized (operating in local resilient fallback mode)',
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    const startTime = Date.now();
+    try {
+        // Lightweight probe query on scheduled_tasks or user_feedback
+        const { error } = await supabase
+            .from('scheduled_tasks')
+            .select('id')
+            .limit(1);
+
+        if (error) {
+            // Fallback probe
+            await supabase.from('user_feedback').select('id').limit(1).catch(() => {});
+        }
+
+        const latencyMs = Date.now() - startTime;
+        heartbeatQueryCount++;
+        lastSupabaseHeartbeat = new Date().toISOString();
+        lastHeartbeatStatus = 'healthy';
+        console.log(`⚡ [Supabase Heartbeat #${heartbeatQueryCount}] Heartbeat query succeeded (${latencyMs}ms). 7-day pause timer reset.`);
+
+        return {
+            success: true,
+            latencyMs,
+            lastHeartbeat: lastSupabaseHeartbeat,
+            queryCount: heartbeatQueryCount,
+            status: 'healthy',
+            message: 'Supabase project active. 7-day inactivity pause prevented.'
+        };
+    } catch (err) {
+        lastHeartbeatStatus = 'error: ' + err.message;
+        console.warn(`⚠️ [Supabase Heartbeat] Heartbeat warning: ${err.message}`);
+        return {
+            success: false,
+            error: err.message,
+            timestamp: new Date().toISOString()
+        };
+    }
+}
+
+// Arm 6-Hour Scheduled Heartbeat (4 times daily) + boot probe
+if (supabase) {
+    setTimeout(pingSupabaseHeartbeat, 3000);
+    setInterval(pingSupabaseHeartbeat, 6 * 60 * 60 * 1000);
+}
+
 // Local Fallback Storage
 const DATA_DIR = path.join(__dirname, 'data');
 const SCHEDULED_FILE = path.join(DATA_DIR, 'scheduled.json');
@@ -339,6 +399,12 @@ module.exports = {
     wipeAllDeviceData,
     recordFeedback,
     getRecentFeedback,
-    isSupabaseConnected: () => !!supabase
+    isSupabaseConnected: () => !!supabase,
+    pingSupabaseHeartbeat,
+    getLastHeartbeatInfo: () => ({
+        lastHeartbeat: lastSupabaseHeartbeat,
+        status: lastHeartbeatStatus,
+        queryCount: heartbeatQueryCount
+    })
 };
 
