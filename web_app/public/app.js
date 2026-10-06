@@ -1,9 +1,24 @@
-// AutoMate Cloud Frontend Logic
+// AutoMate Cloud - Multi-Tenant Client Engine
 
 let isConnected = false;
 
+// 1. Get or Create Isolated Workspace ID per user
+let currentUserId = localStorage.getItem('automate_workspace_id');
+if (!currentUserId) {
+    currentUserId = 'user_' + Math.random().toString(36).substring(2, 8);
+    localStorage.setItem('automate_workspace_id', currentUserId);
+}
+
+// Multi-Tenant API Wrapper (Attaches x-user-id header to all requests)
+function apiFetch(url, options = {}) {
+    options.headers = options.headers || {};
+    options.headers['x-user-id'] = currentUserId;
+    return fetch(url, options);
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    updateWorkspaceDisplay();
     initClock();
     pollStatus();
     setInterval(pollStatus, 3000);
@@ -14,13 +29,40 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('numbersInput').addEventListener('input', updateContactCount);
     document.getElementById('messageInput').addEventListener('input', updateCharCount);
 
-    // Set default schedule time to current time + 1 hour in local format
+    // Default schedule time = now + 1 hour in local format
     const now = new Date();
     now.setHours(now.getHours() + 1);
     now.setMinutes(0);
     const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     document.getElementById('scheduleDateTime').value = localISO;
 });
+
+// Workspace Display & Switcher
+function updateWorkspaceDisplay() {
+    const wsElem = document.getElementById('displayWorkspaceId');
+    if (wsElem) {
+        wsElem.textContent = currentUserId;
+    }
+}
+
+function promptSwitchWorkspace() {
+    const input = prompt(
+        'Apna Workspace Name ya User ID daalein:\n(Har workspace ka alag WhatsApp aur data hota hai)',
+        currentUserId
+    );
+    if (input && input.trim()) {
+        const cleanId = input.trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 30);
+        if (cleanId) {
+            currentUserId = cleanId;
+            localStorage.setItem('automate_workspace_id', currentUserId);
+            updateWorkspaceDisplay();
+            showToast(`Switched to workspace: ${currentUserId}`);
+            pollStatus();
+            loadScheduledJobs();
+            loadHistory();
+        }
+    }
+}
 
 // Live Clock
 function initClock() {
@@ -54,10 +96,10 @@ function switchTab(tabName) {
     }
 }
 
-// Status Polling
+// Status Polling (Scoped to current user)
 async function pollStatus() {
     try {
-        const res = await fetch('/api/status');
+        const res = await apiFetch('/api/status');
         const data = await res.json();
 
         const badge = document.getElementById('connectionStatusBadge');
@@ -96,11 +138,11 @@ async function pollStatus() {
     }
 }
 
-// Logout
+// Logout (Only current user's session)
 async function logoutWhatsApp() {
-    if (!confirm('Are you sure you want to disconnect WhatsApp?')) return;
+    if (!confirm(`Are you sure you want to disconnect WhatsApp for workspace "${currentUserId}"?`)) return;
     try {
-        await fetch('/api/logout', { method: 'POST' });
+        await apiFetch('/api/logout', { method: 'POST' });
         showToast('Logged out. Please scan QR or enter pairing code.');
         pollStatus();
     } catch (err) {
@@ -145,7 +187,7 @@ async function requestPairingCode() {
     btn.textContent = '⏳ Generating Code...';
 
     try {
-        const res = await fetch('/api/request-pairing-code', {
+        const res = await apiFetch('/api/request-pairing-code', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ phoneNumber })
@@ -273,7 +315,7 @@ async function handleDispatch() {
 
     try {
         if (mode === 'instant') {
-            const res = await fetch('/api/send-now', {
+            const res = await apiFetch('/api/send-now', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ numbers: numbersRaw, message })
@@ -293,7 +335,7 @@ async function handleDispatch() {
                 return;
             }
 
-            const res = await fetch('/api/schedule', {
+            const res = await apiFetch('/api/schedule', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ numbers: numbersRaw, message, scheduleTime })
@@ -313,10 +355,10 @@ async function handleDispatch() {
     }
 }
 
-// Scheduled Tasks
+// Scheduled Tasks (User Scoped)
 async function loadScheduledJobs() {
     try {
-        const res = await fetch('/api/scheduled');
+        const res = await apiFetch('/api/scheduled');
         const jobs = await res.json();
 
         const container = document.getElementById('scheduledJobsList');
@@ -351,7 +393,7 @@ async function loadScheduledJobs() {
 async function cancelJob(id) {
     if (!confirm('Are you sure you want to cancel this scheduled broadcast?')) return;
     try {
-        await fetch(`/api/scheduled/${id}`, { method: 'DELETE' });
+        await apiFetch(`/api/scheduled/${id}`, { method: 'DELETE' });
         showToast('Scheduled task canceled.');
         loadScheduledJobs();
     } catch (err) {
@@ -359,10 +401,10 @@ async function cancelJob(id) {
     }
 }
 
-// Delivery History
+// Delivery History (User Scoped)
 async function loadHistory() {
     try {
-        const res = await fetch('/api/history');
+        const res = await apiFetch('/api/history');
         const history = await res.json();
         const tbody = document.getElementById('historyTableBody');
 

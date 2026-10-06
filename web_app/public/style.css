@@ -88,6 +88,46 @@ body {
     gap: 12px;
 }
 
+.workspace-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(88, 166, 255, 0.1);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+}
+
+.ws-icon {
+    font-size: 14px;
+}
+
+.ws-name {
+    font-weight: 600;
+    color: var(--info);
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ws-switch-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--card-border);
+    color: var(--text-primary);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.ws-switch-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
 .clock-badge {
     font-family: monospace;
     font-size: 13px;
