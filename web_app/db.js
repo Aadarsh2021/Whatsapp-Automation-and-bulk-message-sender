@@ -194,12 +194,13 @@ async function fetchDueJobs(currentTime) {
 
     if (supabase) {
         // Stale lock recovery: Reset jobs stuck in 'processing' for over 15 minutes back to 'pending'
-        await supabase
-            .from('scheduled_tasks')
-            .update({ status: 'pending', error: 'Recovered from worker timeout' })
-            .eq('status', 'processing')
-            .lte('locked_at', staleThreshold)
-            .catch(() => {});
+        try {
+            await supabase
+                .from('scheduled_tasks')
+                .update({ status: 'pending', error: 'Recovered from worker timeout' })
+                .eq('status', 'processing')
+                .lte('locked_at', staleThreshold);
+        } catch (_) {}
 
         // Query pending jobs due up to now
         const { data, error } = await supabase
