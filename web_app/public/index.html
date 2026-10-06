@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AutoMate Cloud - WhatsApp Web Automation & Scheduler</title>
+    <meta name="description" content="Cloud-powered WhatsApp Web Automation. Send immediately or schedule broadcasts 24/7 even when your phone or PC is turned off.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Top Navigation Bar -->
+        <header class="top-nav">
+            <div class="brand">
+                <div class="logo-icon">💬</div>
+                <div>
+                    <h1>AutoMate <span>Cloud</span></h1>
+                    <p class="tagline">24/7 WhatsApp Automation &amp; Cloud Scheduler</p>
+                </div>
+            </div>
+
+            <div class="nav-controls">
+                <div id="liveClock" class="clock-badge">🕒 00:00:00</div>
+                <div id="connectionStatusBadge" class="status-badge disconnected">
+                    <span class="status-dot"></span>
+                    <span id="statusText">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="tab-bar">
+            <button id="tabBtnConnect" class="tab-btn active" onclick="switchTab('connect')">
+                <span class="tab-icon">📱</span> Link WhatsApp
+            </button>
+            <button id="tabBtnCompose" class="tab-btn" onclick="switchTab('compose')">
+                <span class="tab-icon">🚀</span> Broadcast &amp; Schedule
+            </button>
+            <button id="tabBtnScheduled" class="tab-btn" onclick="switchTab('scheduled')">
+                <span class="tab-icon">📅</span> Scheduled Tasks <span id="scheduledCountBadge" class="pill-count">0</span>
+            </button>
+            <button id="tabBtnHistory" class="tab-btn" onclick="switchTab('history')">
+                <span class="tab-icon">📊</span> Delivery History
+            </button>
+        </nav>
+
+        <!-- Main Body Sections -->
+        <main class="main-content">
+            
+            <!-- SECTION 1: Connect / QR Code -->
+            <section id="sectionConnect" class="content-section active">
+                <div class="card glass-card connect-card">
+                    <!-- Method Selector -->
+                    <div class="link-method-bar">
+                        <button id="btnMethodQR" class="method-btn active" onclick="switchLinkMethod('qr')">
+                            📷 Scan QR Code <span>(PC / 2 Devices)</span>
+                        </button>
+                        <button id="btnMethodPhone" class="method-btn" onclick="switchLinkMethod('phone')">
+                            🔢 Link with Phone Number <span>(Same Phone / No Camera)</span>
+                        </button>
+                    </div>
+
+                    <!-- Method A: QR Code View -->
+                    <div id="qrMethodBox" class="link-method-content">
+                        <div id="qrContainer" class="qr-state-box">
+                            <div class="qr-wrapper">
+                                <img id="qrImage" src="" alt="WhatsApp QR Code" class="qr-code-img">
+                                <div id="qrLoading" class="qr-spinner">
+                                    <div class="spinner"></div>
+                                    <p>Generating WhatsApp QR Code...</p>
+                                </div>
+                            </div>
+                            <div class="qr-instructions">
+                                <h3>How to Scan QR Code:</h3>
+                                <ol>
+                                    <li>Open <strong>WhatsApp</strong> on your mobile phone.</li>
+                                    <li>Tap <strong>Menu (⋮)</strong> or <strong>Settings</strong> &gt; <strong>Linked Devices</strong>.</li>
+                                    <li>Tap <strong>Link a device</strong> and point your camera at this QR code.</li>
+                                </ol>
+                                <p class="notice-txt">💡 Best when viewing this web app on a Laptop or second phone.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Method B: Phone Number Pairing Code View (For Same Phone) -->
+                    <div id="phoneMethodBox" class="link-method-content" style="display: none;">
+                        <div class="phone-pairing-box">
+                            <div class="pairing-input-card">
+                                <h3>📱 Link Directly on This Phone</h3>
+                                <p class="pairing-sub">No camera or second screen needed! Enter your number to get an 8-digit WhatsApp code.</p>
+                                
+                                <div class="pairing-form">
+                                    <div class="input-with-label">
+                                        <label for="pairingPhoneInput">Your WhatsApp Phone Number (with Country Code):</label>
+                                        <input type="text" id="pairingPhoneInput" class="custom-input" placeholder="e.g. 919876543210" value="91">
+                                    </div>
+                                    <button id="btnGetPairingCode" class="primary-btn glow-btn" onclick="requestPairingCode()">
+                                        🔢 Get 8-Digit Code
+                                    </button>
+                                </div>
+
+                                <!-- Result Code Display Box -->
+                                <div id="pairingCodeResult" class="pairing-code-result" style="display: none;">
+                                    <p class="code-label">Enter this code in WhatsApp:</p>
+                                    <div class="code-display-wrap">
+                                        <span id="displayPairingCode" class="big-pairing-code">---- ----</span>
+                                        <button class="secondary-btn" onclick="copyPairingCode()">📋 Copy</button>
+                                    </div>
+                                    
+                                    <div class="pairing-steps">
+                                        <h4>👉 WhatsApp Me Code Kaise Daalein:</h4>
+                                        <ol>
+                                            <li>Apne phone me <strong>WhatsApp</strong> kholein.</li>
+                                            <li><strong>Settings (ya 3 dots)</strong> &gt; <strong>Linked Devices</strong> &gt; <strong>Link a device</strong> par click karein.</li>
+                                            <li>Screen ke sabse niche <strong>"Link with phone number instead"</strong> par tap karein.</li>
+                                            <li>Upar diya gaya 8-digit code daal dein! ✅</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="connectedStateBox" class="connected-state-box" style="display: none;">
+                        <div class="success-icon-wrap">✅</div>
+                        <h2>WhatsApp is Connected!</h2>
+                        <p class="user-info-text">Account: <span id="connectedAccountName">User</span></p>
+                        <p class="ready-desc">You are all set to broadcast or schedule automated messages.</p>
+                        <div class="btn-group">
+                            <button id="btnProceedCompose" class="primary-btn" onclick="switchTab('compose')">🚀 Go to Compose Message</button>
+                            <button id="btnLogout" class="danger-outline-btn" onclick="logoutWhatsApp()">Logout / Disconnect</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Privacy & Security Assurance Card -->
+                <div class="security-guarantee-card">
+                    <div class="security-header">
+                        <span class="shield-icon">🛡️</span>
+                        <div>
+                            <h4>100% Safe, Private &amp; End-to-End Encrypted</h4>
+                            <p>Aapka data aur WhatsApp account poori tarah se safe rehta hai.</p>
+                        </div>
+                    </div>
+                    <div class="security-grid">
+                        <div class="sec-item">
+                            <span class="sec-icon">🚫</span>
+                            <div>
+                                <h5>No Chat Access</h5>
+                                <p>Hum aapke personal chats ya photos kabhi read ya save nahi karte. Sirf wahi messages bhejte hain jo aap type karte hain.</p>
+                            </div>
+                        </div>
+                        <div class="sec-item">
+                            <span class="sec-icon">🔐</span>
+                            <div>
+                                <h5>No Passwords / OTPs</h5>
+                                <p>Hum kabhi bhi password, PIN ya OTP nahi maangte. Ye WhatsApp ka official Multi-Device connection use karta hai.</p>
+                            </div>
+                        </div>
+                        <div class="sec-item">
+                            <span class="sec-icon">📲</span>
+                            <div>
+                                <h5>Full Control in Your Hands</h5>
+                                <p>Aap apne phone ke WhatsApp me jaakar "Linked Devices" se kisi bhi waqt 1 click me ise disconnect kar sakte hain.</p>
+                            </div>
+                        </div>
+                        <div class="sec-item">
+                            <span class="sec-icon">🔒</span>
+                            <div>
+                                <h5>Zero Data Leakage</h5>
+                                <p>Aapka session aur contacts kisi bhi third-party ya server ke sath share nahi hote.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 2: Compose & Schedule -->
+            <section id="sectionCompose" class="content-section">
+                <div class="compose-grid">
+                    
+                    <!-- Left: Contacts Column -->
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <h3>👥 Target Contacts</h3>
+                            <span id="contactCountBadge" class="badge">0 Contacts</span>
+                        </div>
+                        <p class="helper-text">Enter one phone number per line. (Auto +91 for 10-digit numbers).</p>
+
+                        <textarea id="numbersInput" class="custom-textarea numbers-area" placeholder="919876543210&#10;919123456789&#10;+919811122233"></textarea>
+
+                        <div class="action-btn-row">
+                            <label class="btn-file-upload">
+                                📁 Import TXT/CSV
+                                <input type="file" id="contactsFileInput" accept=".txt,.csv" style="display:none;" onchange="handleFileUpload(event)">
+                            </label>
+                            <button id="btnClearContacts" class="secondary-btn" onclick="clearContacts()">🗑️ Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- Right: Message & Dispatch Mode -->
+                    <div class="card glass-card">
+                        <div class="card-header">
+                            <h3>✍️ Compose Message</h3>
+                            <button id="btnClearMessage" class="tiny-btn" onclick="clearMessage()">Clear Text</button>
+                        </div>
+
+                        <div class="emoji-toolbar">
+                            <button type="button" onclick="insertEmoji('❤️')">❤️</button>
+                            <button type="button" onclick="insertEmoji('🎂')">🎂</button>
+                            <button type="button" onclick="insertEmoji('🎉')">🎉</button>
+                            <button type="button" onclick="insertEmoji('✨')">✨</button>
+                            <button type="button" onclick="insertEmoji('🌸')">🌸</button>
+                            <button type="button" onclick="insertEmoji('💖')">💖</button>
+                            <button type="button" onclick="insertEmoji('🙏')">🙏</button>
+                            <button type="button" onclick="insertEmoji('🥳')">🥳</button>
+                            <button type="button" onclick="insertEmoji('💐')">💐</button>
+                        </div>
+
+                        <textarea id="messageInput" class="custom-textarea message-area" placeholder="Write your message here..."></textarea>
+                        
+                        <div class="char-counter">
+                            <span id="charCount">0 characters</span> • <span id="wordCount">0 words</span>
+                        </div>
+
+                        <!-- Dispatch Mode Switcher -->
+                        <div class="dispatch-mode-container">
+                            <label class="mode-label">Select Dispatch Mode:</label>
+                            <div class="mode-toggle-group">
+                                <label class="radio-pill">
+                                    <input type="radio" name="dispatchMode" value="instant" checked onchange="toggleDispatchMode()">
+                                    <span>⚡ Send Instantly</span>
+                                </label>
+                                <label class="radio-pill">
+                                    <input type="radio" name="dispatchMode" value="schedule" onchange="toggleDispatchMode()">
+                                    <span>⏰ 24/7 Cloud Schedule</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Schedule Picker Box -->
+                        <div id="scheduleConfigBox" class="schedule-box" style="display: none;">
+                            <label for="scheduleDateTime">Pick Date &amp; Time to Send:</label>
+                            <input type="datetime-local" id="scheduleDateTime" class="custom-datetime">
+                            <p class="schedule-hint">💡 Server will dispatch even if your phone/laptop is switched off.</p>
+                        </div>
+
+                        <!-- Dispatch Trigger Button -->
+                        <div class="dispatch-action-row">
+                            <button id="btnDispatch" class="primary-btn glow-btn" onclick="handleDispatch()">
+                                🚀 Send Message Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 3: Scheduled Tasks -->
+            <section id="sectionScheduled" class="content-section">
+                <div class="card glass-card">
+                    <div class="card-header">
+                        <h3>📅 Upcoming Scheduled Tasks</h3>
+                        <button class="secondary-btn" onclick="loadScheduledJobs()">🔄 Refresh</button>
+                    </div>
+                    <div id="scheduledJobsList" class="jobs-list">
+                        <p class="empty-state">No scheduled tasks pending.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 4: Delivery History -->
+            <section id="sectionHistory" class="content-section">
+                <div class="card glass-card">
+                    <div class="card-header">
+                        <h3>📊 Message Delivery History</h3>
+                        <button class="secondary-btn" onclick="loadHistory()">🔄 Refresh</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Recipient</th>
+                                    <th>Status</th>
+                                    <th>Time</th>
+                                    <th>Message Preview</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                <tr>
+                                    <td colspan="4" class="empty-state">No message history available yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Toast Notifications -->
+        <div id="toastNotification" class="toast"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
