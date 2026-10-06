@@ -1,0 +1,271 @@
+// AutoMate Cloud - Resilient Database Layer (Supabase + Local Fallback)
+require('dotenv').config();
+const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
+
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pnjoqcmqlmpnvvehkixr.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+
+let supabase = null;
+if (SUPABASE_KEY) {
+    try {
+        supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+            auth: { persistSession: false }
+        });
+        console.log('⚡ Connected to Supabase Cloud Database (Project: pnjoqcmqlmpnvvehkixr)');
+    } catch (err) {
+        console.error('Supabase initialization error, falling back to local storage:', err.message);
+    }
+} else {
+    console.warn('⚠️ No SUPABASE_KEY provided. Operating in Local Resilient Fallback Mode.');
+}
+
+// Local Fallback Storage
+const DATA_DIR = path.join(__dirname, 'data');
+const SCHEDULED_FILE = path.join(DATA_DIR, 'scheduled.json');
+const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
+
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(SCHEDULED_FILE)) fs.writeFileSync(SCHEDULED_FILE, JSON.stringify([], null, 2));
+if (!fs.existsSync(HISTORY_FILE)) fs.writeFileSync(HISTORY_FILE, JSON.stringify([], null, 2));
+
+function getLocalScheduledJobs() {
+    try { return JSON.parse(fs.readFileSync(SCHEDULED_FILE, 'utf8')); } catch { return []; }
+}
+function saveLocalScheduledJobs(jobs) {
+    fs.writeFileSync(SCHEDULED_FILE, JSON.stringify(jobs, null, 2));
+}
+function getLocalHistory() {
+    try { return JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8')); } catch { return []; }
+}
+function saveLocalHistory(hist) {
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(hist, null, 2));
+}
+
+// ================= DATABASE OPERATIONS =================
+
+// 1. Get Scheduled Tasks for specific device
+async function getScheduledTasksForDevice(deviceId) {
+    if (supabase) {
+        const { data, error } = await supabase
+            .from('scheduled_tasks')
+            .select('*')
+            .eq('device_id', deviceId)
+            .order('schedule_time', { ascending: true });
+        if (!error && data) {
+            return data.map(row => ({
+                id: row.id,
+                userId: row.device_id,
+                numbers: row.numbers,
+                message: row.message,
+                scheduleTime: row.schedule_time,
+                status: row.status,
+                results: row.results,
+                error: row.error,
+                executedAt: row.executed_at
+            }));
+        }
+    }
+    return getLocalScheduledJobs().filter(j => j.userId === deviceId);
+}
+
+// 2. Insert New Scheduled Task
+async function createScheduledTask(task) {
+    if (supabase) {
+        const { error } = await supabase
+            .from('scheduled_tasks')
+            .insert([{
+                id: task.id,
+                device_id: task.userId,
+                numbers: task.numbers,
+                message: task.message,
+                schedule_time: task.scheduleTime,
+                status: 'pending',
+                results: [],
+                error: null
+            }]);
+        if (!error) return task;
+        console.error('Supabase task insert error:', error.message);
+    }
+
+    const jobs = getLocalScheduledJobs();
+    jobs.push(task);
+    saveLocalScheduledJobs(jobs);
+    return task;
+}
+
+// 3. Atomic Lock & Fetch Due Jobs
+async function fetchDueJobs(currentTime) {
+    if (supabase) {
+        // Query pending jobs due up to now
+        const { data, error } = await supabase
+            .from('scheduled_tasks')
+            .select('*')
+            .in('status', ['pending', 'prewarming'])
+            .lte('schedule_time', currentTime.toISOString())
+            .order('schedule_time', { ascending: true })
+            .limit(20);
+
+        if (!error && data) {
+            return data.map(row => ({
+                id: row.id,
+                userId: row.device_id,
+                numbers: row.numbers,
+                message: row.message,
+                scheduleTime: row.schedule_time,
+                status: row.status
+            }));
+        }
+    }
+
+    // Local fallback
+    const jobs = getLocalScheduledJobs();
+    return jobs.filter(j => (j.status === 'pending' || j.status === 'prewarming') && new Date(j.scheduleTime) <= currentTime);
+}
+
+// 4. Atomic Lock on a Job (Ensures zero duplicate execution)
+async function lockJobForExecution(jobId, workerId) {
+    if (supabase) {
+        const { data, error } = await supabase
+            .from('scheduled_tasks')
+            .update({
+                status: 'processing',
+                locked_at: new Date().toISOString(),
+                worker_id: workerId
+            })
+            .eq('id', jobId)
+            .in('status', ['pending', 'prewarming'])
+            .select();
+
+        if (!error && data && data.length > 0) return true;
+        return false;
+    }
+
+    const jobs = getLocalScheduledJobs();
+    const job = jobs.find(j => j.id === jobId && (j.status === 'pending' || j.status === 'prewarming'));
+    if (job) {
+        job.status = 'processing';
+        job.locked_at = new Date().toISOString();
+        saveLocalScheduledJobs(jobs);
+        return true;
+    }
+    return false;
+}
+
+// 5. Update Job Execution Result
+async function finalizeJob(jobId, status, results, errorMsg = null) {
+    const executedAt = new Date().toISOString();
+    if (supabase) {
+        await supabase
+            .from('scheduled_tasks')
+            .update({
+                status,
+                results,
+                error: errorMsg,
+                executed_at: executedAt
+            })
+            .eq('id', jobId);
+    }
+
+    const jobs = getLocalScheduledJobs();
+    const job = jobs.find(j => j.id === jobId);
+    if (job) {
+        job.status = status;
+        job.results = results;
+        job.error = errorMsg;
+        job.executedAt = executedAt;
+        saveLocalScheduledJobs(jobs);
+    }
+}
+
+// 6. Cancel Scheduled Task
+async function cancelScheduledTask(jobId, deviceId) {
+    if (supabase) {
+        const { error } = await supabase
+            .from('scheduled_tasks')
+            .delete()
+            .eq('id', jobId)
+            .eq('device_id', deviceId)
+            .in('status', ['pending', 'prewarming']);
+        if (!error) return true;
+    }
+
+    const jobs = getLocalScheduledJobs();
+    const filtered = jobs.filter(j => !(j.id === jobId && j.userId === deviceId));
+    if (filtered.length !== jobs.length) {
+        saveLocalScheduledJobs(filtered);
+        return true;
+    }
+    return false;
+}
+
+// 7. Delivery History
+async function getHistoryForDevice(deviceId) {
+    if (supabase) {
+        const { data, error } = await supabase
+            .from('delivery_history')
+            .select('*')
+            .eq('device_id', deviceId)
+            .order('created_at', { ascending: false })
+            .limit(100);
+
+        if (!error && data) {
+            return data.map(row => ({
+                id: row.id,
+                userId: row.device_id,
+                number: row.number,
+                message: row.message,
+                status: row.status,
+                error: row.error,
+                time: row.created_at
+            }));
+        }
+    }
+    return getLocalHistory().filter(h => h.userId === deviceId);
+}
+
+async function recordHistory(entry) {
+    if (supabase) {
+        await supabase
+            .from('delivery_history')
+            .insert([{
+                device_id: entry.userId,
+                number: entry.number,
+                message: entry.message,
+                status: entry.status,
+                error: entry.error || null
+            }]);
+    }
+
+    const history = getLocalHistory();
+    history.unshift(entry);
+    if (history.length > 500) history.pop();
+    saveLocalHistory(history);
+}
+
+// 8. 1-Click Wipe All Device Data
+async function wipeAllDeviceData(deviceId) {
+    if (supabase) {
+        await supabase.from('scheduled_tasks').delete().eq('device_id', deviceId);
+        await supabase.from('delivery_history').delete().eq('device_id', deviceId);
+    }
+    const jobs = getLocalScheduledJobs().filter(j => j.userId !== deviceId);
+    saveLocalScheduledJobs(jobs);
+
+    const history = getLocalHistory().filter(h => h.userId !== deviceId);
+    saveLocalHistory(history);
+}
+
+module.exports = {
+    getScheduledTasksForDevice,
+    createScheduledTask,
+    fetchDueJobs,
+    lockJobForExecution,
+    finalizeJob,
+    cancelScheduledTask,
+    getHistoryForDevice,
+    recordHistory,
+    wipeAllDeviceData,
+    isSupabaseConnected: () => !!supabase
+};

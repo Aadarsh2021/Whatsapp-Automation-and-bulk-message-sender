@@ -4,6 +4,10 @@ web_app/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.env
+.env.*
+web_app/.env
+web_app/.env.*
 
 # WhatsApp Private Sessions & Data (NEVER commit credentials or logs)
 web_app/session_data/

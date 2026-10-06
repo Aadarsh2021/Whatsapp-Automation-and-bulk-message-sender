@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -11,6 +12,8 @@ const {
     fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys');
 
+const db = require('./db');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -18,44 +21,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Data & Sessions directories
-const DATA_DIR = path.join(__dirname, 'data');
+// Local Session Storage directory
 const SESSIONS_DIR = path.join(__dirname, 'session_data');
-const SCHEDULED_FILE = path.join(DATA_DIR, 'scheduled.json');
-const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
-
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-if (!fs.existsSync(SCHEDULED_FILE)) fs.writeFileSync(SCHEDULED_FILE, JSON.stringify([], null, 2));
-if (!fs.existsSync(HISTORY_FILE)) fs.writeFileSync(HISTORY_FILE, JSON.stringify([], null, 2));
-
-// Data access helpers (Multi-Tenant)
-function getScheduledJobs() {
-    try {
-        return JSON.parse(fs.readFileSync(SCHEDULED_FILE, 'utf8'));
-    } catch {
-        return [];
-    }
-}
-
-function saveScheduledJobs(jobs) {
-    fs.writeFileSync(SCHEDULED_FILE, JSON.stringify(jobs, null, 2));
-}
-
-function getHistory() {
-    try {
-        return JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
-    } catch {
-        return [];
-    }
-}
-
-function appendHistory(entry) {
-    const history = getHistory();
-    history.unshift(entry);
-    if (history.length > 500) history.pop();
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
-}
 
 // ----------------- Multi-Tenant Session Pool -----------------
 // Map: userId -> { userId, sock, currentQR, connectionStatus, userInfo, isInitializing }
@@ -63,7 +31,6 @@ const sessions = new Map();
 
 function getUserId(req) {
     const raw = req.headers['x-user-id'] || req.query.userId || req.body?.userId || 'default_user';
-    // Sanitize user id to alphanumeric and underscores only
     return raw.toString().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || 'default_user';
 }
 
@@ -100,14 +67,14 @@ async function initUserWhatsApp(userId) {
 
     try {
         const { state, saveCreds } = await useMultiFileAuthState(userSessionDir);
-        const { version } = await fetchLatestBaileysVersion();
+        const { version } = await fetchLatestBaileysVersion().catch(() => ({ version: [2, 3000, 1015901307] }));
 
         const sock = makeWASocket({
             version,
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: 'silent' }),
-            browser: ['AutoMate Cloud', 'Chrome', '1.0.0']
+            browser: ['AutoMate Cloud', 'Chrome', '124.0.0']
         });
 
         session.sock = sock;
@@ -129,14 +96,23 @@ async function initUserWhatsApp(userId) {
 
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
-                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-                console.log(`[User: ${userId}] Connection closed (code ${statusCode}). Reconnect: ${shouldReconnect}`);
+                const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+                console.log(`[User: ${userId}] Connection closed (code ${statusCode}). Logged out: ${isLoggedOut}`);
+
                 session.connectionStatus = 'disconnected';
                 session.currentQR = null;
                 session.userInfo = null;
                 session.isInitializing = false;
 
-                if (shouldReconnect) {
+                if (isLoggedOut) {
+                    // Fail-Safe 1: Clean up unlinked session immediately to prevent infinite reconnect loops
+                    console.log(`🧹 [User: ${userId}] Cleaning unlinked credentials on disk.`);
+                    if (fs.existsSync(userSessionDir)) {
+                        fs.rmSync(userSessionDir, { recursive: true, force: true });
+                    }
+                    sessions.delete(userId);
+                } else {
+                    // Transient disconnect: Reconnect after 4s
                     setTimeout(() => initUserWhatsApp(userId), 4000);
                 }
             } else if (connection === 'open') {
@@ -157,7 +133,7 @@ async function initUserWhatsApp(userId) {
     }
 }
 
-// Auto-restore any existing sessions saved on disk
+// Auto-restore any existing sessions on server boot
 function restoreSavedSessions() {
     if (fs.existsSync(SESSIONS_DIR)) {
         try {
@@ -177,13 +153,12 @@ function restoreSavedSessions() {
         }
     }
 }
-
-// Start auto-restore
 restoreSavedSessions();
 
-// Helper: Send Batch Messages using specific user's socket
+// ================= ANTI-BAN JITTER BATCH SENDER =================
 async function sendBatchMessages(sock, userId, numbers, message) {
     const results = [];
+
     for (let i = 0; i < numbers.length; i++) {
         let raw = numbers[i].trim();
         let clean = raw.replace(/\D/g, '');
@@ -193,64 +168,100 @@ async function sendBatchMessages(sock, userId, numbers, message) {
         const timestamp = new Date().toISOString();
 
         try {
+            // Anti-Ban Simulation: Send typing presence 1.2s before message
+            await sock.sendPresenceUpdate('composing', jid).catch(() => {});
+            await new Promise((res) => setTimeout(res, 1200));
+
             await sock.sendMessage(jid, { text: message });
             results.push({ number: clean, status: 'sent', time: timestamp });
-            appendHistory({ userId, number: clean, message, status: 'sent', time: timestamp });
+
+            await db.recordHistory({ userId, number: clean, message, status: 'sent', time: timestamp });
             console.log(`[User: ${userId}] Sent to +${clean} (${i + 1}/${numbers.length})`);
         } catch (err) {
+            // Fail-Safe 6: Isolated per-recipient try/catch (1 bad number never stops the batch)
             results.push({ number: clean, status: 'failed', error: err.message, time: timestamp });
-            appendHistory({ userId, number: clean, message, status: 'failed', error: err.message, time: timestamp });
+            await db.recordHistory({ userId, number: clean, message, status: 'failed', error: err.message, time: timestamp });
             console.error(`[User: ${userId}] Failed +${clean}:`, err.message);
         }
 
+        // Anti-Ban Dynamic Jitter Delay (3.0s to 5.5s randomized)
         if (i < numbers.length - 1) {
-            await new Promise((res) => setTimeout(res, 3000));
+            const jitterDelay = 3000 + Math.floor(Math.random() * 2500);
+            await new Promise((res) => setTimeout(res, jitterDelay));
         }
     }
     return results;
 }
 
-// ----------------- Multi-Tenant Background Scheduler -----------------
+// ================= WORKER POOL & PRE-WARMED SCHEDULER =================
+let activeWorkers = 0;
+const MAX_CONCURRENT_WORKERS = 8; // Memory-safe concurrency limit for 512MB RAM
+
 setInterval(async () => {
-    const jobs = getScheduledJobs();
     const now = new Date();
-    let updated = false;
 
-    for (let job of jobs) {
-        if (job.status === 'pending') {
-            const jobTime = new Date(job.scheduleTime);
-            if (jobTime <= now) {
-                console.log(`⏰ [User: ${job.userId}] Triggering scheduled job ID: ${job.id}`);
-                job.status = 'processing';
-                saveScheduledJobs(jobs);
+    // 1. Pre-Warming Pass: Connect sockets 30 seconds before midnight
+    const preWarmWindow = new Date(now.getTime() + 35000);
+    const upcomingJobs = await db.fetchDueJobs(preWarmWindow);
 
-                const session = sessions.get(job.userId);
-                if (!session || session.connectionStatus !== 'connected' || !session.sock) {
-                    job.status = 'failed';
-                    job.error = 'WhatsApp is not connected for this user account.';
-                    console.warn(`[User: ${job.userId}] Scheduled job failed: WhatsApp disconnected.`);
-                } else {
-                    try {
-                        const results = await sendBatchMessages(session.sock, job.userId, job.numbers, job.message);
-                        job.status = 'completed';
-                        job.results = results;
-                        job.executedAt = new Date().toISOString();
-                    } catch (err) {
-                        job.status = 'failed';
-                        job.error = err.message;
-                    }
-                }
-                updated = true;
-            }
+    for (const job of upcomingJobs) {
+        if (!sessions.has(job.userId) || sessions.get(job.userId).connectionStatus !== 'connected') {
+            console.log(`🔥 Pre-warming socket for user: ${job.userId} (due at ${job.scheduleTime})`);
+            getOrCreateSession(job.userId);
         }
     }
 
-    if (updated) {
-        saveScheduledJobs(jobs);
-    }
-}, 10000); // Checks every 10s
+    // 2. Dispatch Execution Pass (Atomic Lock per job)
+    const dueJobs = await db.fetchDueJobs(now);
 
-// ----------------- API Endpoints (All Multi-Tenant) -----------------
+    for (const job of dueJobs) {
+        if (activeWorkers >= MAX_CONCURRENT_WORKERS) {
+            console.warn(`⏳ Worker pool full (${activeWorkers}/${MAX_CONCURRENT_WORKERS}). Queueing job ${job.id}`);
+            break;
+        }
+
+        // Atomic Idempotency Lock: Only 1 worker can process this job
+        const workerId = `worker_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+        const acquired = await db.lockJobForExecution(job.id, workerId);
+        if (!acquired) continue;
+
+        activeWorkers++;
+        (async () => {
+            try {
+                console.log(`⏰ [Worker: ${workerId}] Executing job ID: ${job.id} for user ${job.userId}`);
+                const session = sessions.get(job.userId);
+
+                if (!session || session.connectionStatus !== 'connected' || !session.sock) {
+                    await db.finalizeJob(job.id, 'failed', [], 'WhatsApp is disconnected on user device.');
+                    console.warn(`[User: ${job.userId}] Scheduled job failed: Disconnected.`);
+                } else {
+                    const results = await sendBatchMessages(session.sock, job.userId, job.numbers, job.message);
+                    await db.finalizeJob(job.id, 'completed', results, null);
+                    console.log(`✅ [Job: ${job.id}] Finished successfully.`);
+                }
+            } catch (err) {
+                console.error(`Job ${job.id} execution error:`, err);
+                await db.finalizeJob(job.id, 'failed', [], err.message);
+            } finally {
+                activeWorkers--;
+            }
+        })();
+    }
+}, 8000); // Ticks every 8 seconds
+
+// ================= API ENDPOINTS =================
+
+// Health & Keep-Alive Endpoint (For UptimeRobot 24/7 pinging)
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        supabaseConnected: db.isSupabaseConnected(),
+        activeSessions: sessions.size,
+        activeWorkers,
+        memoryUsageMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+    });
+});
 
 // User Session Status
 app.get('/api/status', (req, res) => {
@@ -260,11 +271,12 @@ app.get('/api/status', (req, res) => {
         userId,
         status: session.connectionStatus,
         qrCode: session.currentQR,
-        user: session.userInfo
+        user: session.userInfo,
+        supabaseActive: db.isSupabaseConnected()
     });
 });
 
-// Request 8-Digit Pairing Code for Specific User
+// Request 8-Digit Pairing Code
 app.post('/api/request-pairing-code', async (req, res) => {
     const userId = getUserId(req);
     const session = getOrCreateSession(userId);
@@ -296,7 +308,7 @@ app.post('/api/request-pairing-code', async (req, res) => {
     }
 });
 
-// Logout / Disconnect ONLY this user's session
+// Logout / Disconnect this user's session
 app.post('/api/logout', async (req, res) => {
     const userId = getUserId(req);
     const session = sessions.get(userId);
@@ -312,15 +324,37 @@ app.post('/api/logout', async (req, res) => {
         }
 
         sessions.delete(userId);
-        getOrCreateSession(userId); // Re-initialize clean session for this user
+        getOrCreateSession(userId);
 
-        res.json({ success: true, message: `Workspace ${userId} logged out successfully.` });
+        res.json({ success: true, message: `Device session ${userId} unlinked successfully.` });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// Send Now (Dedicated to user's connected WhatsApp)
+// 1-Click Complete Data Wipe (User Trust & GDPR Safety)
+app.post('/api/wipe-data', async (req, res) => {
+    const userId = getUserId(req);
+    const session = sessions.get(userId);
+
+    try {
+        if (session?.sock) {
+            await session.sock.logout().catch(() => {});
+        }
+        const userDir = path.join(SESSIONS_DIR, userId);
+        if (fs.existsSync(userDir)) {
+            fs.rmSync(userDir, { recursive: true, force: true });
+        }
+        sessions.delete(userId);
+
+        await db.wipeAllDeviceData(userId);
+        res.json({ success: true, message: 'All personal data and credentials have been permanently wiped.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Send Now
 app.post('/api/send-now', async (req, res) => {
     const userId = getUserId(req);
     const session = sessions.get(userId);
@@ -334,10 +368,10 @@ app.post('/api/send-now', async (req, res) => {
     }
 
     if (!session || session.connectionStatus !== 'connected' || !session.sock) {
-        return res.status(400).json({ error: 'WhatsApp is not connected for your account. Please link WhatsApp first.' });
+        return res.status(400).json({ error: 'WhatsApp is not connected. Please link WhatsApp first.' });
     }
 
-    sendBatchMessages(session.sock, userId, numbers, message).catch((e) => console.error(`[User: ${userId}] Batch error:`, e));
+    sendBatchMessages(session.sock, userId, numbers, message.trim()).catch((e) => console.error(`[User: ${userId}] Batch error:`, e));
 
     res.json({
         success: true,
@@ -345,8 +379,8 @@ app.post('/api/send-now', async (req, res) => {
     });
 });
 
-// Schedule Message (Dedicated to user)
-app.post('/api/schedule', (req, res) => {
+// Schedule Message
+app.post('/api/schedule', async (req, res) => {
     const userId = getUserId(req);
     const { numbers, message, scheduleTime } = req.body;
 
@@ -365,19 +399,15 @@ app.post('/api/schedule', (req, res) => {
         return res.status(400).json({ error: 'Schedule time must be in the future.' });
     }
 
-    const jobs = getScheduledJobs();
     const newJob = {
-        id: 'job_' + Date.now(),
+        id: 'job_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
         userId,
         numbers,
-        message,
-        scheduleTime: targetDate.toISOString(),
-        status: 'pending',
-        createdAt: new Date().toISOString()
+        message: message.trim(),
+        scheduleTime: targetDate.toISOString()
     };
 
-    jobs.unshift(newJob);
-    saveScheduledJobs(jobs);
+    await db.createScheduledTask(newJob);
 
     res.json({
         success: true,
@@ -386,34 +416,31 @@ app.post('/api/schedule', (req, res) => {
     });
 });
 
-// Get User's Scheduled Jobs (Only their own)
-app.get('/api/scheduled', (req, res) => {
+// Get User's Scheduled Jobs
+app.get('/api/scheduled', async (req, res) => {
     const userId = getUserId(req);
-    const jobs = getScheduledJobs().filter(j => j.userId === userId);
+    const jobs = await db.getScheduledTasksForDevice(userId);
     res.json(jobs);
 });
 
-// Cancel User's Scheduled Job (Only their own)
-app.delete('/api/scheduled/:id', (req, res) => {
+// Cancel User's Scheduled Job
+app.delete('/api/scheduled/:id', async (req, res) => {
     const userId = getUserId(req);
-    const jobs = getScheduledJobs();
-    const filtered = jobs.filter(j => !(j.id === req.params.id && j.userId === userId));
+    const canceled = await db.cancelScheduledTask(req.params.id, userId);
 
-    if (filtered.length === jobs.length) {
-        return res.status(404).json({ error: 'Job not found or not owned by you.' });
+    if (!canceled) {
+        return res.status(404).json({ error: 'Job not found or already executed.' });
     }
-
-    saveScheduledJobs(filtered);
     res.json({ success: true, message: 'Job canceled successfully.' });
 });
 
-// Get User's History (Only their own)
-app.get('/api/history', (req, res) => {
+// Get User's History
+app.get('/api/history', async (req, res) => {
     const userId = getUserId(req);
-    const history = getHistory().filter(h => h.userId === userId);
+    const history = await db.getHistoryForDevice(userId);
     res.json(history);
 });
 
 app.listen(PORT, () => {
-    console.log(`🌐 AutoMate Multi-Tenant Server running on port ${PORT}`);
+    console.log(`🌐 AutoMate Resilient Cloud Server running on port ${PORT}`);
 });
