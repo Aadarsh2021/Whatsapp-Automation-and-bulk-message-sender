@@ -242,8 +242,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initAuth();
     pollStatus();
     setInterval(pollStatus, 3000);
-    pollHealthMetrics();
-    setInterval(pollHealthMetrics, 20000);
     loadScheduledJobs();
     loadHistory();
     updateChatPreview();
@@ -357,7 +355,6 @@ async function pollStatus() {
         const connectedBox = document.getElementById('connectedStateBox');
         const qrImage = document.getElementById('qrImage');
         const qrLoading = document.getElementById('qrLoading');
-        const metricNode = document.getElementById('metricNodeStatus');
 
         badge.className = 'status-badge ' + data.status;
 
@@ -371,10 +368,6 @@ async function pollStatus() {
             qrContainer.style.display = 'none';
             connectedBox.style.display = 'flex';
             document.getElementById('connectedAccountName').textContent = data.user?.id || 'Connected';
-            if (metricNode) {
-                metricNode.textContent = 'Active (Baileys v2.4)';
-                metricNode.className = 'metric-value text-accent';
-            }
         } else if (data.status === 'qr_ready' && data.qrCode) {
             isConnected = false;
             statusText.textContent = 'Scan QR Code';
@@ -383,10 +376,6 @@ async function pollStatus() {
             qrImage.src = data.qrCode;
             qrImage.style.display = 'block';
             qrLoading.style.display = 'none';
-            if (metricNode) {
-                metricNode.textContent = 'QR Code Ready';
-                metricNode.className = 'metric-value';
-            }
         } else {
             isConnected = false;
             statusText.textContent = 'Initializing...';
@@ -394,37 +383,9 @@ async function pollStatus() {
             connectedBox.style.display = 'none';
             qrImage.style.display = 'none';
             qrLoading.style.display = 'flex';
-            if (metricNode) {
-                metricNode.textContent = 'Standby / Pre-Warming';
-                metricNode.className = 'metric-value';
-            }
         }
     } catch (err) {
         console.error('Failed to poll status:', err);
-    }
-}
-
-async function pollHealthMetrics() {
-    try {
-        const res = await fetch('/api/health');
-        if (!res.ok) return;
-        const data = await res.json();
-
-        const renderCell = document.getElementById('metricRenderKeepAlive');
-        if (renderCell && data.render) {
-            renderCell.textContent = data.render.status === 'awake'
-                ? `24/7 Active (Pings: ${data.render.totalPings || 0})`
-                : '24/7 Active (10m Ping)';
-        }
-
-        const sbCell = document.getElementById('metricSupabaseHeartbeat');
-        if (sbCell && data.supabase) {
-            sbCell.textContent = data.supabase.connected
-                ? `Active (Queries: ${data.supabase.queryCount || 0})`
-                : 'Local Mode';
-        }
-    } catch {
-        // silent fallback
     }
 }
 

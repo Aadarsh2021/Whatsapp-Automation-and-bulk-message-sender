@@ -80,33 +80,6 @@
             </div>
         </header>
 
-        <!-- Live System Health Ribbon -->
-        <div class="system-metrics-ribbon">
-            <div class="metric-cell">
-                <span class="metric-radar-dot"></span>
-                <span class="metric-title">Engine Node:</span>
-                <span id="metricNodeStatus" class="metric-value">Baileys Multi-Device</span>
-            </div>
-            <div class="metric-divider"></div>
-            <div class="metric-cell">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                <span class="metric-title">Render Keep-Alive:</span>
-                <span id="metricRenderKeepAlive" class="metric-value text-accent">24/7 Active (10m Ping)</span>
-            </div>
-            <div class="metric-divider"></div>
-            <div class="metric-cell">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
-                <span class="metric-title">Supabase Pause-Guard:</span>
-                <span id="metricSupabaseHeartbeat" class="metric-value text-accent">Active (6h Heartbeat)</span>
-            </div>
-            <div class="metric-divider"></div>
-            <div class="metric-cell">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                <span class="metric-title">Anti-Ban Pacing:</span>
-                <span class="metric-value">Humanized Jitter Active</span>
-            </div>
-        </div>
-
         <!-- Navigation Tabs (Segmented Control) -->
         <nav class="tab-bar">
             <button id="tabBtnConnect" class="tab-btn active" onclick="switchTab('connect')">
