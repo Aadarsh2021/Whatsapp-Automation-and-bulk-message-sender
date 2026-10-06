@@ -16,11 +16,49 @@ if (!currentDeviceId) {
     localStorage.setItem('automate_device_id', currentDeviceId);
 }
 
-// Scoped API Wrapper (Attaches x-user-id header on every request)
-function apiFetch(url, options = {}) {
+let currentAccessToken = null;
+
+async function getAuthToken() {
+    if (currentAccessToken) return currentAccessToken;
+    if (supabaseClient) {
+        try {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            if (session && session.access_token) {
+                currentAccessToken = session.access_token;
+                return currentAccessToken;
+            }
+        } catch (e) {}
+    }
+    const savedDemo = localStorage.getItem('automate_demo_user');
+    if (savedDemo) {
+        try {
+            const parsed = JSON.parse(savedDemo);
+            if (parsed.token) {
+                currentAccessToken = parsed.token;
+                return currentAccessToken;
+            }
+        } catch (e) {}
+    }
+    return null;
+}
+
+// Scoped API Wrapper: Automatically attaches verified Authorization Bearer token
+async function apiFetch(url, options = {}) {
     options.headers = options.headers || {};
-    options.headers['x-user-id'] = currentDeviceId;
-    return fetch(url, options);
+    const token = await getAuthToken();
+    if (token) {
+        options.headers['Authorization'] = `Bearer ${token}`;
+    }
+    if (currentDeviceId) {
+        options.headers['x-user-id'] = currentDeviceId;
+    }
+    const res = await fetch(url, options);
+    // If backend returns 401 or 403 identity mismatch, session expired or revoked
+    if (res.status === 401 && authenticatedUser) {
+        console.warn('Session expired or revoked by server.');
+        applyGuestUser();
+    }
+    return res;
 }
 
 // ================= AUTHENTICATION & GOOGLE OAUTH =================
@@ -36,13 +74,14 @@ async function initAuth() {
             // Check active session
             supabaseClient.auth.getSession().then(({ data: { session } }) => {
                 if (session && session.user) {
+                    currentAccessToken = session.access_token;
                     applyAuthenticatedUser({
                         id: session.user.id,
                         email: session.user.email,
                         name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
                         avatar: session.user.user_metadata?.avatar_url || null,
                         provider: 'Google OAuth 2.0'
-                    }, false);
+                    }, false, session.access_token);
                 } else {
                     checkSavedAuth();
                 }
@@ -53,14 +92,16 @@ async function initAuth() {
             // Listen for OAuth redirect / sign in events
             supabaseClient.auth.onAuthStateChange((event, session) => {
                 if (session && session.user) {
+                    currentAccessToken = session.access_token;
                     applyAuthenticatedUser({
                         id: session.user.id,
                         email: session.user.email,
                         name: session.user.user_metadata?.full_name || session.user.email.split('@')[0],
                         avatar: session.user.user_metadata?.avatar_url || null,
                         provider: 'Google OAuth 2.0'
-                    }, true);
+                    }, true, session.access_token);
                 } else if (event === 'SIGNED_OUT') {
+                    currentAccessToken = null;
                     applyGuestUser();
                 }
             });
@@ -77,7 +118,9 @@ function checkSavedAuth() {
     const savedDemo = localStorage.getItem('automate_demo_user');
     if (savedDemo) {
         try {
-            applyAuthenticatedUser(JSON.parse(savedDemo), false);
+            const parsed = JSON.parse(savedDemo);
+            currentAccessToken = parsed.token || null;
+            applyAuthenticatedUser(parsed, false, parsed.token);
         } catch (e) {
             applyGuestUser();
         }
@@ -86,8 +129,9 @@ function checkSavedAuth() {
     }
 }
 
-function applyAuthenticatedUser(user, reloadData = true) {
+function applyAuthenticatedUser(user, reloadData = true, token = null) {
     authenticatedUser = user;
+    if (token) currentAccessToken = token;
     currentDeviceId = 'usr_' + user.id.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 36);
     
     const authBtn = document.getElementById('googleAuthBtn');
@@ -124,6 +168,7 @@ function applyAuthenticatedUser(user, reloadData = true) {
 
 function applyGuestUser() {
     authenticatedUser = null;
+    currentAccessToken = null;
     let guestId = localStorage.getItem('automate_device_id');
     if (!guestId) {
         guestId = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36).slice(-4);
@@ -161,7 +206,7 @@ async function signInWithGoogle() {
             }
         });
         if (error) {
-            console.warn('OAuth redirect notice:', error.message);
+            console.warn('OAuth notice:', error.message);
             showToast('Google OAuth notice: ' + error.message);
             setTimeout(() => {
                 if (confirm('Google OAuth provider is not yet enabled in your Supabase dashboard. Would you like to sign in using Sandbox Developer Mode?')) {
@@ -175,21 +220,37 @@ async function signInWithGoogle() {
     }
 }
 
-function signInDemoUser() {
-    const demoUser = {
-        id: 'usr_' + Math.random().toString(36).substr(2, 8),
-        email: 'developer@automate.cloud',
-        name: 'Developer Sandbox',
-        avatar: 'https://ui-avatars.com/api/?name=Developer+Sandbox&background=00a884&color=fff',
-        provider: 'Sandbox Environment'
-    };
-    localStorage.setItem('automate_demo_user', JSON.stringify(demoUser));
-    applyAuthenticatedUser(demoUser, true);
-    closeModal('modalAuth');
-    showToast('Signed in with Sandbox Developer Profile.');
+async function signInDemoUser() {
+    try {
+        const res = await fetch('/api/auth/sandbox-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'developer@automate.sandbox' })
+        });
+        const data = await res.json();
+        if (data.token) {
+            const demoUser = {
+                id: data.userId.replace('usr_', ''),
+                email: data.email,
+                name: 'Developer Sandbox',
+                avatar: 'https://ui-avatars.com/api/?name=Developer+Sandbox&background=00a884&color=fff',
+                provider: 'Sandbox Environment',
+                token: data.token
+            };
+            localStorage.setItem('automate_demo_user', JSON.stringify(demoUser));
+            applyAuthenticatedUser(demoUser, true, data.token);
+            closeModal('modalAuth');
+            showToast('Signed in with Sandbox Developer Profile.');
+        } else {
+            showToast(data.error || 'Sandbox mode is disabled in production.');
+        }
+    } catch (err) {
+        showToast('Sandbox login error: ' + err.message);
+    }
 }
 
 async function signOutUser() {
+    currentAccessToken = null;
     localStorage.removeItem('automate_demo_user');
     if (supabaseClient) {
         await supabaseClient.auth.signOut().catch(() => {});
@@ -873,18 +934,23 @@ async function loadScheduledJobs() {
         }
 
         container.innerHTML = cachedJobs.map(job => {
-            const dateStr = new Date(job.scheduleTime).toLocaleString();
+            const dateStr = escapeHtml(new Date(job.scheduleTime).toLocaleString());
             const statusClass = job.status === 'completed' ? 'sent' : (job.status === 'pending' ? 'badge' : 'failed');
+            const statusText = escapeHtml((job.status || 'UNKNOWN').toUpperCase());
+            const rawMsg = job.message || '';
+            const msgSnippet = escapeHtml(rawMsg.length > 55 ? rawMsg.substring(0, 55) + '...' : rawMsg);
+            const safeJobId = encodeURIComponent(job.id);
+            const recipientCount = Number(Array.isArray(job.numbers) ? job.numbers.length : 0);
             return `
-                <div class="job-card interactive-row" onclick="openJobDetailsModal('${job.id}')">
+                <div class="job-card interactive-row" onclick="openJobDetailsModal('${safeJobId}')">
                     <div class="job-info">
                         <h4>${dateStr}</h4>
-                        <p><strong>Recipients:</strong> ${job.numbers.length} contacts | <strong>Status:</strong> <span class="${statusClass}">${job.status.toUpperCase()}</span></p>
-                        <p><strong>Message:</strong> "${job.message.length > 55 ? job.message.substring(0, 55) + '...' : job.message}"</p>
+                        <p><strong>Recipients:</strong> ${recipientCount} contacts | <strong>Status:</strong> <span class="${statusClass}">${statusText}</span></p>
+                        <p><strong>Message:</strong> "${msgSnippet}"</p>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;" onclick="event.stopPropagation()">
-                        <button class="secondary-btn" onclick="openJobDetailsModal('${job.id}')">Details</button>
-                        ${job.status === 'pending' ? `<button class="danger-outline-btn" onclick="cancelJob('${job.id}')">Cancel</button>` : ''}
+                        <button class="secondary-btn" onclick="openJobDetailsModal('${safeJobId}')">Details</button>
+                        ${job.status === 'pending' ? `<button class="danger-outline-btn" onclick="cancelJob('${safeJobId}')">Cancel</button>` : ''}
                     </div>
                 </div>
             `;
@@ -895,35 +961,44 @@ async function loadScheduledJobs() {
 }
 
 function openJobDetailsModal(jobId) {
-    const job = cachedJobs.find(j => j.id === jobId);
+    const job = cachedJobs.find(j => String(j.id) === String(decodeURIComponent(jobId)));
     if (!job) return;
 
     document.getElementById('detailsModalTitle').textContent = 'Scheduled Task Details';
-    document.getElementById('detailsModalStatus').textContent = job.status.toUpperCase();
+    document.getElementById('detailsModalStatus').textContent = (job.status || '').toUpperCase();
     document.getElementById('detailsModalTime').textContent = new Date(job.scheduleTime).toLocaleString();
-    document.getElementById('detailsModalRecipientCount').textContent = `${job.numbers.length} Contacts`;
-    document.getElementById('detailsModalMessage').textContent = job.message;
+    document.getElementById('detailsModalRecipientCount').textContent = `${(job.numbers || []).length} Contacts`;
+    document.getElementById('detailsModalMessage').textContent = job.message || '';
 
     const recWrap = document.getElementById('detailsModalRecipientsList');
     if (job.results && job.results.length > 0) {
-        recWrap.innerHTML = job.results.map(r => `
-            <div class="recipient-row-item">
-                <span>+${r.number}</span>
-                <span class="status-pill ${r.status}">${r.status.toUpperCase()}</span>
-            </div>
-        `).join('');
+        recWrap.innerHTML = job.results.map(r => {
+            const num = escapeHtml(r.number || '');
+            const st = escapeHtml((r.status || 'unknown').toUpperCase());
+            const pillClass = (r.status === 'sent' || r.status === 'completed') ? 'sent' : 'failed';
+            return `
+                <div class="recipient-row-item">
+                    <span>+${num}</span>
+                    <span class="status-pill ${pillClass}">${st}</span>
+                </div>
+            `;
+        }).join('');
     } else {
-        recWrap.innerHTML = job.numbers.map(n => `
-            <div class="recipient-row-item">
-                <span>+${n}</span>
-                <span class="status-pill pending">PENDING</span>
-            </div>
-        `).join('');
+        recWrap.innerHTML = (job.numbers || []).map(n => {
+            const num = escapeHtml(n || '');
+            return `
+                <div class="recipient-row-item">
+                    <span>+${num}</span>
+                    <span class="status-pill pending">PENDING</span>
+                </div>
+            `;
+        }).join('');
     }
 
     const actionDiv = document.getElementById('detailsModalCustomAction');
     if (job.status === 'pending') {
-        actionDiv.innerHTML = `<button class="danger-btn" onclick="cancelJob('${job.id}'); closeModal('modalDetails');">Cancel Task</button>`;
+        const safeJobId = encodeURIComponent(job.id);
+        actionDiv.innerHTML = `<button class="danger-btn" onclick="cancelJob('${safeJobId}'); closeModal('modalDetails');">Cancel Task</button>`;
     } else {
         actionDiv.innerHTML = '';
     }
@@ -1044,16 +1119,20 @@ function openHistoryDetailsModal(index) {
     if (!item) return;
 
     document.getElementById('detailsModalTitle').textContent = 'Delivery Record Details';
-    document.getElementById('detailsModalStatus').textContent = item.status.toUpperCase();
-    document.getElementById('detailsModalTime').textContent = new Date(item.time).toLocaleString();
+    document.getElementById('detailsModalStatus').textContent = (item.status || 'UNKNOWN').toUpperCase();
+    document.getElementById('detailsModalTime').textContent = item.time ? new Date(item.time).toLocaleString() : 'N/A';
     document.getElementById('detailsModalRecipientCount').textContent = '1 Recipient';
-    document.getElementById('detailsModalMessage').textContent = item.message;
+    document.getElementById('detailsModalMessage').textContent = item.message || '';
 
     const recWrap = document.getElementById('detailsModalRecipientsList');
+    const safeNum = escapeHtml(item.number || '');
+    const safeStatus = escapeHtml((item.status || 'UNKNOWN').toUpperCase());
+    const pillClass = (item.status === 'sent' || item.status === 'completed') ? 'sent' : 'failed';
+    const errorSuffix = item.error ? ` (${escapeHtml(item.error)})` : '';
     recWrap.innerHTML = `
         <div class="recipient-row-item">
-            <span>+${item.number}</span>
-            <span class="status-pill ${item.status}">${item.status.toUpperCase()}${item.error ? ` (${item.error})` : ''}</span>
+            <span>+${safeNum}</span>
+            <span class="status-pill ${pillClass}">${safeStatus}${errorSuffix}</span>
         </div>
     `;
 

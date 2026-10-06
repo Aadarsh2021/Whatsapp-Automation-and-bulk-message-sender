@@ -44,18 +44,43 @@ ON public.delivery_history (device_id, created_at DESC);
 ALTER TABLE public.scheduled_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.delivery_history ENABLE ROW LEVEL SECURITY;
 
--- Allow server operations via service_role and device-scoped access
-CREATE POLICY "Allow server full access on tasks" 
+-- Drop legacy permissive policies if they exist
+DROP POLICY IF EXISTS "Allow server full access on tasks" ON public.scheduled_tasks;
+DROP POLICY IF EXISTS "Allow server full access on history" ON public.delivery_history;
+
+-- A. Scheduled Tasks Policies:
+-- 1. Service role (backend server) has administrative access for execution
+CREATE POLICY "Service Role full access on tasks" 
 ON public.scheduled_tasks 
 FOR ALL 
+TO service_role 
 USING (true) 
 WITH CHECK (true);
 
-CREATE POLICY "Allow server full access on history" 
+-- 2. Authenticated end users strictly access only their own tasks
+CREATE POLICY "Tenant task isolation" 
+ON public.scheduled_tasks 
+FOR ALL 
+TO authenticated 
+USING (device_id = ('usr_' || auth.uid()::text)) 
+WITH CHECK (device_id = ('usr_' || auth.uid()::text));
+
+-- B. Delivery History Policies:
+-- 1. Service role full access to insert & manage logs
+CREATE POLICY "Service Role full access on history" 
 ON public.delivery_history 
 FOR ALL 
+TO service_role 
 USING (true) 
 WITH CHECK (true);
+
+-- 2. Authenticated end users strictly view & delete only their own history
+CREATE POLICY "Tenant history isolation" 
+ON public.delivery_history 
+FOR ALL 
+TO authenticated 
+USING (device_id = ('usr_' || auth.uid()::text)) 
+WITH CHECK (device_id = ('usr_' || auth.uid()::text));
 
 -- 4. Atomic Job Lock Function (Prevents any duplicate execution at midnight)
 CREATE OR REPLACE FUNCTION public.acquire_task_lock(p_task_id TEXT, p_worker_id TEXT)
@@ -101,13 +126,27 @@ ON public.user_feedback (created_at DESC);
 
 ALTER TABLE public.user_feedback ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow anyone to submit feedback" 
+DROP POLICY IF EXISTS "Allow anyone to submit feedback" ON public.user_feedback;
+DROP POLICY IF EXISTS "Allow public read access on feedback" ON public.user_feedback;
+
+CREATE POLICY "Service Role full access on feedback" 
+ON public.user_feedback 
+FOR ALL 
+TO service_role 
+USING (true) 
+WITH CHECK (true);
+
+CREATE POLICY "Allow submission of feedback" 
 ON public.user_feedback 
 FOR INSERT 
 WITH CHECK (true);
 
-CREATE POLICY "Allow public read access on feedback" 
-ON public.user_feedback 
-FOR SELECT 
-USING (true);
-
+-- Secure Public View (Strictly omits user_email and device_id to prevent email harvesting)
+CREATE OR REPLACE VIEW public.public_feedback_reviews AS
+SELECT 
+    id,
+    rating,
+    category,
+    comment,
+    created_at
+FROM public.user_feedback;

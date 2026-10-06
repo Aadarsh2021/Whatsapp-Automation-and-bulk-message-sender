@@ -13,26 +13,44 @@ const {
 } = require('@whiskeysockets/baileys');
 
 const db = require('./db');
+const {
+    requireAuth,
+    getTenantSessionDir,
+    generateSandboxToken,
+    pairingCodeLimiter,
+    messageDispatchLimiter,
+    wipeDataLimiter,
+    generalApiLimiter
+} = require('./auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.disable('x-powered-by');
+
+// Security Headers Middleware
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+});
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '500kb' }));
+app.use(express.urlencoded({ extended: true, limit: '500kb' }));
+app.use('/api/', generalApiLimiter.middleware(req => req.ip));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Local Session Storage directory
-const SESSIONS_DIR = path.join(__dirname, 'session_data');
+const SESSIONS_DIR = path.resolve(__dirname, 'session_data');
 if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
 
 // ----------------- Multi-Tenant Session Pool -----------------
 // Map: userId -> { userId, sock, currentQR, connectionStatus, userInfo, isInitializing }
 const sessions = new Map();
-
-function getUserId(req) {
-    const raw = req.headers['x-user-id'] || req.query.userId || req.body?.userId || 'default_user';
-    return raw.toString().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || 'default_user';
-}
 
 function getOrCreateSession(userId) {
     if (sessions.has(userId)) {
@@ -59,7 +77,7 @@ async function initUserWhatsApp(userId) {
 
     session.isInitializing = true;
     session.connectionStatus = 'connecting';
-    const userSessionDir = path.join(SESSIONS_DIR, userId);
+    const userSessionDir = getTenantSessionDir(userId);
 
     if (!fs.existsSync(userSessionDir)) {
         fs.mkdirSync(userSessionDir, { recursive: true });
@@ -142,10 +160,16 @@ function restoreSavedSessions() {
                 .map(d => d.name);
 
             for (const uid of userDirs) {
-                const credsPath = path.join(SESSIONS_DIR, uid, 'creds.json');
-                if (fs.existsSync(credsPath)) {
-                    console.log(`🔄 Auto-restoring session for user: ${uid}`);
-                    getOrCreateSession(uid);
+                if (!uid.startsWith('usr_')) continue;
+                try {
+                    const userDir = getTenantSessionDir(uid);
+                    const credsPath = path.join(userDir, 'creds.json');
+                    if (fs.existsSync(credsPath)) {
+                        console.log(`🔄 Auto-restoring session for user: ${uid}`);
+                        getOrCreateSession(uid);
+                    }
+                } catch (e) {
+                    console.warn(`Skipping untrusted session directory: ${uid}`);
                 }
             }
         } catch (err) {
@@ -346,22 +370,9 @@ app.get('/api/keepalive/render', (req, res) => {
     });
 });
 
-// User Session Status
-app.get('/api/status', (req, res) => {
-    const userId = getUserId(req);
-
-    // Strict Gate: Baileys WhatsApp sessions require verified Google authentication (usr_*)
-    if (!userId.startsWith('usr_')) {
-        return res.json({
-            userId,
-            status: 'auth_required',
-            qrCode: null,
-            user: null,
-            supabaseActive: db.isSupabaseConnected(),
-            message: 'Sign in with Google required before initiating WhatsApp session.'
-        });
-    }
-
+// User Session Status (Cryptographically Verified Tenant Isolation)
+app.get('/api/status', requireAuth, (req, res) => {
+    const userId = req.userId;
     const session = getOrCreateSession(userId);
     res.json({
         userId,
@@ -372,30 +383,28 @@ app.get('/api/status', (req, res) => {
     });
 });
 
-// Request 8-Digit Pairing Code
-app.post('/api/request-pairing-code', async (req, res) => {
-    const userId = getUserId(req);
-
-    if (!userId.startsWith('usr_')) {
-        return res.status(401).json({ error: 'Google login is required to generate a WhatsApp pairing code.' });
-    }
-
+// Request 8-Digit Pairing Code (Rate Limited & Input Validated)
+app.post('/api/request-pairing-code', requireAuth, pairingCodeLimiter.middleware(req => req.userId), async (req, res) => {
+    const userId = req.userId;
     const session = getOrCreateSession(userId);
     const { phoneNumber } = req.body;
 
-    if (!phoneNumber) {
-        return res.status(400).json({ error: 'Phone number is required.' });
+    if (!phoneNumber || typeof phoneNumber !== 'string') {
+        return res.status(400).json({ error: 'Valid phone number is required.' });
     }
 
     let clean = phoneNumber.replace(/\D/g, '');
+    if (clean.length < 8 || clean.length > 15) {
+        return res.status(400).json({ error: 'Phone number must be between 8 and 15 digits including country code.' });
+    }
     if (clean.length === 10) clean = '91' + clean;
 
     if (!session.sock) {
-        return res.status(500).json({ error: 'WhatsApp socket is initializing. Please retry in 3 seconds.' });
+        return res.status(503).json({ error: 'WhatsApp socket is initializing. Please retry in 3 seconds.' });
     }
 
     if (session.connectionStatus === 'connected') {
-        return res.status(400).json({ error: 'WhatsApp is already connected for this workspace!' });
+        return res.status(400).json({ error: 'WhatsApp is already connected for this workspace.' });
     }
 
     try {
@@ -405,44 +414,44 @@ app.post('/api/request-pairing-code', async (req, res) => {
         res.json({ success: true, code });
     } catch (err) {
         console.error(`[User: ${userId}] Pairing code error:`, err);
-        res.status(500).json({ error: err.message || 'Failed to generate pairing code.' });
+        res.status(500).json({ error: 'Failed to generate pairing code. Please retry.' });
     }
 });
 
-// Logout / Disconnect this user's session
-app.post('/api/logout', async (req, res) => {
-    const userId = getUserId(req);
+// Logout / Disconnect this user's session cleanly
+app.post('/api/logout', requireAuth, async (req, res) => {
+    const userId = req.userId;
     const session = sessions.get(userId);
 
     try {
         if (session?.sock) {
             await session.sock.logout().catch(() => {});
+            try { session.sock.end(); } catch (e) {}
         }
 
-        const userDir = path.join(SESSIONS_DIR, userId);
+        const userDir = getTenantSessionDir(userId);
         if (fs.existsSync(userDir)) {
             fs.rmSync(userDir, { recursive: true, force: true });
         }
 
         sessions.delete(userId);
-        getOrCreateSession(userId);
-
         res.json({ success: true, message: `Device session ${userId} unlinked successfully.` });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Failed to unlink session: ' + err.message });
     }
 });
 
-// 1-Click Complete Data Wipe (User Trust & GDPR Safety)
-app.post('/api/wipe-data', async (req, res) => {
-    const userId = getUserId(req);
+// 1-Click Complete Data Wipe (Rate Limited & Tenant Isolated)
+app.post('/api/wipe-data', requireAuth, wipeDataLimiter.middleware(req => req.userId), async (req, res) => {
+    const userId = req.userId;
     const session = sessions.get(userId);
 
     try {
         if (session?.sock) {
             await session.sock.logout().catch(() => {});
+            try { session.sock.end(); } catch (e) {}
         }
-        const userDir = path.join(SESSIONS_DIR, userId);
+        const userDir = getTenantSessionDir(userId);
         if (fs.existsSync(userDir)) {
             fs.rmSync(userDir, { recursive: true, force: true });
         }
@@ -451,26 +460,27 @@ app.post('/api/wipe-data', async (req, res) => {
         await db.wipeAllDeviceData(userId);
         res.json({ success: true, message: 'All personal data and credentials have been permanently wiped.' });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Failed to wipe data: ' + err.message });
     }
 });
 
-// Send Now
-app.post('/api/send-now', async (req, res) => {
-    const userId = getUserId(req);
-
-    if (!userId.startsWith('usr_')) {
-        return res.status(401).json({ error: 'Google login is required to send messages.' });
-    }
-
+// Send Now (Rate Limited & Input Validated)
+app.post('/api/send-now', requireAuth, messageDispatchLimiter.middleware(req => req.userId), async (req, res) => {
+    const userId = req.userId;
     const session = sessions.get(userId);
     const { numbers, message } = req.body;
 
     if (!numbers || !Array.isArray(numbers) || numbers.length === 0) {
         return res.status(400).json({ error: 'Please provide at least one phone number.' });
     }
-    if (!message || !message.trim()) {
+    if (numbers.length > 500) {
+        return res.status(400).json({ error: 'Batch limit exceeded. Maximum 500 recipients per broadcast.' });
+    }
+    if (!message || typeof message !== 'string' || !message.trim()) {
         return res.status(400).json({ error: 'Message cannot be empty.' });
+    }
+    if (message.length > 4096) {
+        return res.status(400).json({ error: 'Message exceeds maximum allowable length of 4096 characters.' });
     }
 
     if (!session || session.connectionStatus !== 'connected' || !session.sock) {
@@ -485,29 +495,36 @@ app.post('/api/send-now', async (req, res) => {
     });
 });
 
-// Schedule Message
-app.post('/api/schedule', async (req, res) => {
-    const userId = getUserId(req);
-
-    if (!userId.startsWith('usr_')) {
-        return res.status(401).json({ error: 'Google login is required to schedule messages.' });
-    }
-
+// Schedule Message (Rate Limited & Input Validated)
+app.post('/api/schedule', requireAuth, messageDispatchLimiter.middleware(req => req.userId), async (req, res) => {
+    const userId = req.userId;
     const { numbers, message, scheduleTime } = req.body;
 
     if (!numbers || !Array.isArray(numbers) || numbers.length === 0) {
         return res.status(400).json({ error: 'Please provide at least one phone number.' });
     }
-    if (!message || !message.trim()) {
+    if (numbers.length > 500) {
+        return res.status(400).json({ error: 'Batch limit exceeded. Maximum 500 recipients per scheduled broadcast.' });
+    }
+    if (!message || typeof message !== 'string' || !message.trim()) {
         return res.status(400).json({ error: 'Message cannot be empty.' });
+    }
+    if (message.length > 4096) {
+        return res.status(400).json({ error: 'Message exceeds maximum allowable length of 4096 characters.' });
     }
     if (!scheduleTime) {
         return res.status(400).json({ error: 'Schedule time is required.' });
     }
 
     const targetDate = new Date(scheduleTime);
-    if (isNaN(targetDate.getTime()) || targetDate <= new Date()) {
-        return res.status(400).json({ error: 'Schedule time must be in the future.' });
+    const now = new Date();
+    const maxFutureDate = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+
+    if (isNaN(targetDate.getTime()) || targetDate <= now) {
+        return res.status(400).json({ error: 'Schedule time must be a valid future timestamp.' });
+    }
+    if (targetDate > maxFutureDate) {
+        return res.status(400).json({ error: 'Schedule time cannot be more than 1 year in advance.' });
     }
 
     const newJob = {
@@ -527,27 +544,28 @@ app.post('/api/schedule', async (req, res) => {
     });
 });
 
-// Get User's Scheduled Jobs
-app.get('/api/scheduled', async (req, res) => {
-    const userId = getUserId(req);
+// Get User's Scheduled Jobs (Strict Tenant Isolation)
+app.get('/api/scheduled', requireAuth, async (req, res) => {
+    const userId = req.userId;
     const jobs = await db.getScheduledTasksForDevice(userId);
     res.json(jobs);
 });
 
-// Cancel User's Scheduled Job
-app.delete('/api/scheduled/:id', async (req, res) => {
-    const userId = getUserId(req);
-    const canceled = await db.cancelScheduledTask(req.params.id, userId);
+// Cancel User's Scheduled Job (Ownership Enforced)
+app.delete('/api/scheduled/:id', requireAuth, async (req, res) => {
+    const userId = req.userId;
+    const jobId = req.params.id;
+    const canceled = await db.cancelScheduledTask(jobId, userId);
 
     if (!canceled) {
-        return res.status(404).json({ error: 'Job not found or already executed.' });
+        return res.status(404).json({ error: 'Job not found, already executed, or unauthorized.' });
     }
     res.json({ success: true, message: 'Job canceled successfully.' });
 });
 
-// Get User's History
-app.get('/api/history', async (req, res) => {
-    const userId = getUserId(req);
+// Get User's History (Strict Tenant Isolation)
+app.get('/api/history', requireAuth, async (req, res) => {
+    const userId = req.userId;
     const history = await db.getHistoryForDevice(userId);
     res.json(history);
 });
@@ -556,43 +574,71 @@ app.get('/api/history', async (req, res) => {
 app.get('/api/auth/config', (req, res) => {
     res.json({
         supabaseUrl: process.env.SUPABASE_URL || '',
-        supabaseAnonKey: process.env.SUPABASE_ANON_KEY || ''
+        supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
+        isLocalFallback: !db.isSupabaseConnected()
     });
 });
 
-// Submit User Feedback / Review
-app.post('/api/feedback', async (req, res) => {
+// Sandbox Token Generation (Permitted ONLY in offline local fallback mode)
+app.post('/api/auth/sandbox-token', (req, res) => {
+    if (db.isSupabaseConnected() && process.env.NODE_ENV !== 'test') {
+        return res.status(403).json({
+            error: 'Sandbox developer tokens are disabled in production when Supabase is connected.',
+            code: 'SANDBOX_DISABLED'
+        });
+    }
+    const requestedId = (req.body?.id || 'sandbox_' + Math.random().toString(36).substring(2, 8))
+        .replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 36);
+    const email = req.body?.email || 'developer@automate.local';
+    const token = generateSandboxToken(requestedId, email);
+    res.json({
+        token,
+        userId: `usr_${requestedId}`,
+        email,
+        expiresIn: 86400
+    });
+});
+
+// Submit User Feedback / Review (Authenticated with Input Validation)
+app.post('/api/feedback', requireAuth, async (req, res) => {
     try {
-        const userId = getUserId(req);
+        const userId = req.userId;
         const { rating, category, comment, userEmail } = req.body;
 
-        if (!comment || !comment.trim()) {
+        if (!comment || typeof comment !== 'string' || !comment.trim()) {
             return res.status(400).json({ error: 'Please enter your feedback comments.' });
         }
+        if (comment.length > 1000) {
+            return res.status(400).json({ error: 'Comment exceeds maximum allowable length of 1000 characters.' });
+        }
+
+        const cleanRating = Math.min(5, Math.max(1, parseInt(rating) || 5));
+        const allowedCategories = ['general', 'feature', 'bug', 'performance', 'praise'];
+        const cleanCategory = allowedCategories.includes(category) ? category : 'general';
 
         const saved = await db.recordFeedback({
-            rating: rating || 5,
-            category: category || 'general',
+            rating: cleanRating,
+            category: cleanCategory,
             comment: comment.trim(),
-            userEmail: userEmail || null,
+            userEmail: userEmail || req.user.email || null,
             deviceId: userId
         });
 
         res.json({
             success: true,
-            feedback: saved,
+            feedback: { id: saved.id, rating: saved.rating, category: saved.category, createdAt: saved.createdAt },
             message: 'Thank you! Your feedback helps us improve AutoMate Cloud.'
         });
     } catch (err) {
         console.error('Feedback submission error:', err);
-        res.status(500).json({ error: 'Failed to record feedback: ' + err.message });
+        res.status(500).json({ error: 'Failed to record feedback.' });
     }
 });
 
-// Get Recent Community Feedback / Reviews
+// Get Recent Community Feedback / Reviews (Anonymized & Email-Masked)
 app.get('/api/feedback', async (req, res) => {
     try {
-        const limit = parseInt(req.query.limit) || 20;
+        const limit = Math.min(50, parseInt(req.query.limit) || 20);
         const list = await db.getRecentFeedback(limit);
         res.json(list);
     } catch (err) {
@@ -600,8 +646,12 @@ app.get('/api/feedback', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`🌐 AutoMate Resilient Cloud Server running on port ${PORT}`);
-    startRenderKeepAliveAgent();
-});
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`🌐 AutoMate Resilient Cloud Server running on port ${PORT}`);
+        startRenderKeepAliveAgent();
+    });
+}
+
+module.exports = app;
 

@@ -62,12 +62,12 @@ graph TD
 
     UI -->|Google OAuth| OAuthModal
     OAuthModal -->|Returns Session Token| UI
-    UI -->|REST with x-user-id Header| API
+    UI -->|REST with Authorization: Bearer Token| API
     GH -->|GET /api/health| API
     RenderPing -->|GET /api/health| API
 
     API --> AuthFilter
-    AuthFilter -->|Allowed| SessionPool
+    AuthFilter -->|Cryptographically Verified usr_*| SessionPool
     SessionPool --> DiskStore
     SessionPool --> Baileys
     Baileys -->|Noise Encrypted TCP| WAOfficial
@@ -124,13 +124,15 @@ sequenceDiagram
     end
 
     Note over User, WA: Step 2: Multi-Device Linking
-    UI->>Server: GET /api/status (Headers: x-user-id: usr_xxx)
+    UI->>Server: GET /api/status (Authorization: Bearer <token>)
+    Server->>Server: requireAuth verifies token via Supabase Auth
+    Server->>Server: Derives req.userId = usr_<user.id>
     Server->>Server: Checks session pool (starts Baileys if absent)
     Server-->>UI: Returns { status: 'qr_ready', qrCode: 'data:image/png...' }
     UI->>User: Renders live QR code (or allows 8-digit Pairing Code)
     User->>WA: Scans QR Code in WhatsApp Settings > Linked Devices
     WA-->>Server: Multi-Device Handshake Verified
-    Server->>Server: Stores auth credentials in session_data/usr_xxx/
+    Server->>Server: Stores auth credentials in session_data/usr_<user.id>/
     Server-->>UI: Next poll: { status: 'connected', user: '919876543210' }
     UI->>User: Shows "WhatsApp Connected" green badge
 
@@ -140,8 +142,8 @@ sequenceDiagram
     UI->>User: Renders real-time WhatsApp Chat Preview
     User->>UI: Selects "Cloud Scheduled (Midnight 12:00 AM)"
     User->>UI: Clicks "Schedule Message Broadcast"
-    UI->>Server: POST /api/schedule { numbers, message, scheduleTime }
-    Server->>Supabase: Inserts job into scheduled_tasks table
+    UI->>Server: POST /api/schedule (Authorization: Bearer <token>, Body: { numbers, message, scheduleTime })
+    Server->>Supabase: Inserts job into scheduled_tasks table (scoped to verified usr_<user.id>)
     Server-->>UI: { success: true, message: 'Message scheduled' }
     UI->>User: Displays confirmation toast & adds job to "Scheduled Tasks" tab
 
@@ -163,12 +165,23 @@ sequenceDiagram
 
 ### 5.1. Authentication & Tenant Isolation Engine
 
-- **Security Enforcement:**
-  Any request without a header matching `x-user-id: usr_*` is blocked by the backend API:
-  - `/api/status`: Returns `{ status: 'auth_required' }` without instantiating any Baileys socket.
-  - `/api/request-pairing-code`: Returns `401 Unauthorized`.
-  - `/api/send-now`: Returns `401 Unauthorized`.
-  - `/api/schedule`: Returns `401 Unauthorized`.
+- **Cryptographic Trust Model:**
+  User identity is **never trusted from client-controlled headers**. Identity is derived strictly from cryptographically verified tokens via the `requireAuth` middleware:
+  ```text
+  Browser
+     ↓
+  Authorization: Bearer <Supabase Auth JWT>
+     ↓
+  requireAuth Middleware (db.verifyUserToken / supabase.auth.getUser)
+     ↓
+  req.userId = 'usr_' + sanitizeTenantId(user.id)
+     ↓
+  Database RLS / Tenant Queries / Isolated Baileys Session
+  ```
+- **Defense-in-Depth Identity Mismatch Filter:**
+  If a client sends an `x-user-id` header (for legacy debugging or spoofing attempts) that contradicts the cryptographically verified token identity, the request is immediately rejected with `HTTP 403 Forbidden` (`IDENTITY_MISMATCH`), logging a security alert.
+- **Directory Traversal Hardening:**
+  Tenant IDs are strictly validated by `sanitizeTenantId(id)`. Any input containing directory traversal sequences (`..`, `/`, `\`) is rejected with a security violation error. `getTenantSessionDir(userId)` ensures the canonical resolved path strictly resides within the `web_app/session_data/` boundary.
 - **Directory Isolation:**
   Every authenticated user's Multi-Device session state is stored inside an isolated directory:
   ```
@@ -179,7 +192,7 @@ sequenceDiagram
       └── pre-key-...
   ```
 - **GDPR & Privacy Compliance:**
-  The application provides a 1-Click "Complete Data Wipe" endpoint (`/api/wipe-data`) that disconnects the active Baileys socket, purges the directory on disk (`fs.rmSync`), and wipes all scheduled tasks and logs from the database for that user ID.
+  The application provides a 1-Click "Complete Data Wipe" endpoint (`/api/wipe-data`, rate-limited to 3 per 10m) that disconnects the active Baileys socket, purges the directory on disk (`fs.rmSync`), and wipes all scheduled tasks and logs from the database for that user ID.
 
 ---
 
@@ -304,17 +317,36 @@ Supabase acts as the cloud persistence, auth identity provider, and PostgreSQL d
    Users have zero capability to view, modify, or delete scheduled tasks or history logs belonging to another user.
 2. **SQL Injection Immunity:**
    AutoMate uses the Supabase PostgREST client which transforms JavaScript object queries into parameterized PostgreSQL queries, rendering SQL injection impossible.
-3. **Database RLS Policies:**
+3. **Database RLS Policies (PostgreSQL Layer):**
    ```sql
-   -- Enable Row Level Security
-   ALTER TABLE scheduled_tasks ENABLE ROW LEVEL SECURITY;
-   ALTER TABLE history_logs ENABLE ROW LEVEL SECURITY;
-   ALTER TABLE user_feedback ENABLE ROW LEVEL SECURITY;
+   -- Enable Row Level Security on all tenant tables
+   ALTER TABLE public.scheduled_tasks ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE public.delivery_history ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE public.user_feedback ENABLE ROW LEVEL SECURITY;
 
-   -- Policy: Users can only read and manage their own scheduled tasks
-   CREATE POLICY "User task isolation" ON scheduled_tasks
-       FOR ALL
-       USING (auth.uid()::text = user_id OR user_id = current_setting('request.jwt.claims', true)::json->>'sub');
+   -- Policy: Authenticated users can ONLY read and modify their own tenant rows
+   CREATE POLICY "Tasks Tenant Isolation" ON public.scheduled_tasks
+       FOR ALL TO authenticated
+       USING (device_id = ('usr_' || auth.uid()::text))
+       WITH CHECK (device_id = ('usr_' || auth.uid()::text));
+
+   CREATE POLICY "History Tenant Isolation" ON public.delivery_history
+       FOR ALL TO authenticated
+       USING (device_id = ('usr_' || auth.uid()::text))
+       WITH CHECK (device_id = ('usr_' || auth.uid()::text));
+
+   -- Policy: Backend worker and scheduler processes use service_role
+   CREATE POLICY "Service Role Full Access Tasks" ON public.scheduled_tasks
+       FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+   CREATE POLICY "Service Role Full Access History" ON public.delivery_history
+       FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+   -- Privacy View: Public feedback reviews mask email and omit device_id
+   CREATE OR REPLACE VIEW public.public_feedback_reviews AS
+       SELECT id, rating, category, comment, created_at,
+              regexp_replace(user_email, '^(.)(.*)(@.*)$', '\1***\3') AS masked_email
+       FROM public.user_feedback;
    ```
 
 ### 6.3. Supabase 7-Day Inactivity Keep-Alive System Design
@@ -402,22 +434,23 @@ CREATE TABLE IF NOT EXISTS user_feedback (
 
 ## 8. Complete API Reference
 
-| Endpoint | Method | Auth Required | Description |
-|---|---|---|---|
-| `/api/health` | `GET` | No | System health check (Render keep-alive status, Supabase heartbeat, uptime, memory). |
-| `/api/auth/config` | `GET` | No | Returns Supabase project URL and Anon Key for client OAuth initialization. |
-| `/api/status` | `GET` | Yes (`usr_*`) | Returns active WhatsApp status (`qr_ready`, `connected`, `connecting`, `disconnected`). |
-| `/api/request-pairing-code`| `POST` | Yes (`usr_*`) | Generates an 8-digit mobile pairing code for a given phone number. |
-| `/api/send-now` | `POST` | Yes (`usr_*`) | Dispatches an immediate bulk broadcast with humanized jitter. |
-| `/api/schedule` | `POST` | Yes (`usr_*`) | Enqueues a scheduled message batch for autonomous future execution. |
-| `/api/scheduled` | `GET` | Yes (`usr_*`) | Fetches all pending and upcoming scheduled tasks for the user. |
-| `/api/scheduled/:id` | `DELETE`| Yes (`usr_*`) | Cancels a pending scheduled task. |
-| `/api/history` | `GET` | Yes (`usr_*`) | Retrieves delivery logs and recipient execution breakdown. |
-| `/api/feedback` | `POST` | Yes (`usr_*`) | Submits a star rating, category, and review. |
-| `/api/logout` | `POST` | Yes (`usr_*`) | Unlinks WhatsApp session and deletes local session keys. |
-| `/api/wipe-data` | `POST` | Yes (`usr_*`) | Permanently wipes all personal session data, credentials, and scheduled tasks. |
-| `/api/keepalive/supabase` | `GET` | No | Manual trigger for Supabase 7-day heartbeat query. |
-| `/api/keepalive/render` | `GET` | No | Manual trigger for Render self-ping keep-alive agent. |
+| Endpoint | Method | Auth Required | Rate Limit | Description |
+|---|---|---|---|---|
+| `/api/health` | `GET` | No | 120 / min | System health check (Render keep-alive status, Supabase heartbeat, uptime, memory). |
+| `/api/auth/config` | `GET` | No | 120 / min | Returns Supabase project URL and Anon Key for client OAuth initialization. |
+| `/api/status` | `GET` | Bearer Token | 120 / min | Returns active WhatsApp status (`qr_ready`, `connected`, `connecting`, `disconnected`). |
+| `/api/request-pairing-code`| `POST` | Bearer Token | 5 / 5 min | Generates an 8-digit mobile pairing code for a given phone number. |
+| `/api/send-now` | `POST` | Bearer Token | 15 / min | Dispatches an immediate bulk broadcast with humanized jitter. |
+| `/api/schedule` | `POST` | Bearer Token | 15 / min | Enqueues a scheduled message batch for autonomous future execution. |
+| `/api/scheduled` | `GET` | Bearer Token | 120 / min | Fetches all pending and upcoming scheduled tasks for the authenticated tenant. |
+| `/api/scheduled/:id` | `DELETE`| Bearer Token | 120 / min | Cancels a pending scheduled task (scoped to tenant). |
+| `/api/history` | `GET` | Bearer Token | 120 / min | Retrieves delivery logs and recipient execution breakdown (scoped to tenant). |
+| `/api/feedback` | `POST` | Bearer Token | 120 / min | Submits a star rating, category, and review. |
+| `/api/feedback` | `GET` | No | 120 / min | Fetches recent feedback with masked author emails and omitted device IDs. |
+| `/api/logout` | `POST` | Bearer Token | 120 / min | Unlinks WhatsApp session and deletes local session keys. |
+| `/api/wipe-data` | `POST` | Bearer Token | 3 / 10 min | Permanently wipes all personal session data, credentials, and scheduled tasks. |
+| `/api/keepalive/supabase` | `GET` | No | 120 / min | Manual trigger for Supabase 7-day heartbeat query. |
+| `/api/keepalive/render` | `GET` | No | 120 / min | Manual trigger for Render self-ping keep-alive agent. |
 
 ---
 

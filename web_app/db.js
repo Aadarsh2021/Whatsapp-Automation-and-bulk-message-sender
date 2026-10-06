@@ -81,7 +81,7 @@ if (supabase) {
     setInterval(pingSupabaseHeartbeat, 6 * 60 * 60 * 1000);
 }
 
-// Local Fallback Storage
+// Local Fallback Storage with Atomic Writes to prevent corruption
 const DATA_DIR = path.join(__dirname, 'data');
 const SCHEDULED_FILE = path.join(DATA_DIR, 'scheduled.json');
 const HISTORY_FILE = path.join(DATA_DIR, 'history.json');
@@ -92,23 +92,48 @@ if (!fs.existsSync(SCHEDULED_FILE)) fs.writeFileSync(SCHEDULED_FILE, JSON.string
 if (!fs.existsSync(HISTORY_FILE)) fs.writeFileSync(HISTORY_FILE, JSON.stringify([], null, 2));
 if (!fs.existsSync(FEEDBACK_FILE)) fs.writeFileSync(FEEDBACK_FILE, JSON.stringify([], null, 2));
 
+function atomicWriteJson(filePath, data) {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const tempPath = `${filePath}.tmp.${Date.now()}.${Math.random().toString(36).substr(2, 4)}`;
+    try {
+        fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
+        fs.renameSync(tempPath, filePath);
+    } catch (err) {
+        if (fs.existsSync(tempPath)) {
+            try { fs.unlinkSync(tempPath); } catch (_) {}
+        }
+        throw err;
+    }
+}
+
 function getLocalScheduledJobs() {
     try { return JSON.parse(fs.readFileSync(SCHEDULED_FILE, 'utf8')); } catch { return []; }
 }
 function saveLocalScheduledJobs(jobs) {
-    fs.writeFileSync(SCHEDULED_FILE, JSON.stringify(jobs, null, 2));
+    atomicWriteJson(SCHEDULED_FILE, jobs);
 }
 function getLocalHistory() {
     try { return JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8')); } catch { return []; }
 }
 function saveLocalHistory(hist) {
-    fs.writeFileSync(HISTORY_FILE, JSON.stringify(hist, null, 2));
+    atomicWriteJson(HISTORY_FILE, hist);
 }
 function getLocalFeedback() {
     try { return JSON.parse(fs.readFileSync(FEEDBACK_FILE, 'utf8')); } catch { return []; }
 }
 function saveLocalFeedback(feedbacks) {
-    fs.writeFileSync(FEEDBACK_FILE, JSON.stringify(feedbacks, null, 2));
+    atomicWriteJson(FEEDBACK_FILE, feedbacks);
+}
+
+function maskEmail(email) {
+    if (!email || typeof email !== 'string') return 'Community Member';
+    const parts = email.split('@');
+    if (parts.length !== 2) return 'Community Member';
+    const user = parts[0];
+    const domain = parts[1];
+    const visible = user.slice(0, Math.min(2, user.length));
+    return `${visible}***@${domain}`;
 }
 
 // ================= DATABASE OPERATIONS =================
@@ -163,9 +188,19 @@ async function createScheduledTask(task) {
     return task;
 }
 
-// 3. Atomic Lock & Fetch Due Jobs
+// 3. Atomic Lock & Fetch Due Jobs (with Stale Lock Auto-Recovery)
 async function fetchDueJobs(currentTime) {
+    const staleThreshold = new Date(currentTime.getTime() - 15 * 60 * 1000).toISOString();
+
     if (supabase) {
+        // Stale lock recovery: Reset jobs stuck in 'processing' for over 15 minutes back to 'pending'
+        await supabase
+            .from('scheduled_tasks')
+            .update({ status: 'pending', error: 'Recovered from worker timeout' })
+            .eq('status', 'processing')
+            .lte('locked_at', staleThreshold)
+            .catch(() => {});
+
         // Query pending jobs due up to now
         const { data, error } = await supabase
             .from('scheduled_tasks')
@@ -187,8 +222,18 @@ async function fetchDueJobs(currentTime) {
         }
     }
 
-    // Local fallback
+    // Local fallback with stale lock recovery
     const jobs = getLocalScheduledJobs();
+    let recoveredAny = false;
+    jobs.forEach(j => {
+        if (j.status === 'processing' && j.locked_at && new Date(j.locked_at) < new Date(currentTime.getTime() - 15 * 60 * 1000)) {
+            j.status = 'pending';
+            j.error = 'Recovered from worker timeout';
+            recoveredAny = true;
+        }
+    });
+    if (recoveredAny) saveLocalScheduledJobs(jobs);
+
     return jobs.filter(j => (j.status === 'pending' || j.status === 'prewarming') && new Date(j.scheduleTime) <= currentTime);
 }
 
@@ -250,13 +295,20 @@ async function finalizeJob(jobId, status, results, errorMsg = null) {
 // 6. Cancel Scheduled Task
 async function cancelScheduledTask(jobId, deviceId) {
     if (supabase) {
-        const { error } = await supabase
-            .from('scheduled_tasks')
-            .delete()
-            .eq('id', jobId)
-            .eq('device_id', deviceId)
-            .in('status', ['pending', 'prewarming']);
-        if (!error) return true;
+        try {
+            const { data, error } = await supabase
+                .from('scheduled_tasks')
+                .delete()
+                .eq('id', jobId)
+                .eq('device_id', deviceId)
+                .in('status', ['pending', 'prewarming'])
+                .select('id');
+            if (!error && data && data.length > 0) {
+                return true;
+            }
+        } catch (err) {
+            // Fall back to local check if query errors
+        }
     }
 
     const jobs = getLocalScheduledJobs();
@@ -366,14 +418,14 @@ async function getRecentFeedback(limit = 20) {
         try {
             const { data, error } = await supabase
                 .from('user_feedback')
-                .select('*')
+                .select('id, user_email, rating, category, comment, created_at')
                 .order('created_at', { ascending: false })
                 .limit(limit);
             if (!error && data && data.length > 0) {
                 return data.map(r => ({
                     id: r.id,
-                    deviceId: r.device_id,
-                    userEmail: r.user_email,
+                    author: maskEmail(r.user_email),
+                    userEmail: maskEmail(r.user_email),
                     rating: r.rating,
                     category: r.category,
                     comment: r.comment,
@@ -384,7 +436,15 @@ async function getRecentFeedback(limit = 20) {
             // fallback to local
         }
     }
-    return getLocalFeedback().slice(0, limit);
+    return getLocalFeedback().slice(0, limit).map(r => ({
+        id: r.id,
+        author: maskEmail(r.userEmail),
+        userEmail: maskEmail(r.userEmail),
+        rating: r.rating,
+        category: r.category,
+        comment: r.comment,
+        createdAt: r.createdAt
+    }));
 }
 
 module.exports = {
@@ -400,6 +460,10 @@ module.exports = {
     recordFeedback,
     getRecentFeedback,
     isSupabaseConnected: () => !!supabase,
+    verifyUserToken: async (token) => {
+        if (!supabase) return { data: { user: null }, error: new Error('Supabase client not initialized') };
+        return await supabase.auth.getUser(token);
+    },
     pingSupabaseHeartbeat,
     getLastHeartbeatInfo: () => ({
         lastHeartbeat: lastSupabaseHeartbeat,
@@ -407,4 +471,5 @@ module.exports = {
         queryCount: heartbeatQueryCount
     })
 };
+
 
