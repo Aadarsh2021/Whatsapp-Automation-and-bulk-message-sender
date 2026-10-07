@@ -9,7 +9,8 @@ const {
     default: makeWASocket,
     useMultiFileAuthState,
     DisconnectReason,
-    fetchLatestBaileysVersion
+    fetchLatestBaileysVersion,
+    Browsers
 } = require('@whiskeysockets/baileys');
 
 const db = require('./db');
@@ -95,7 +96,7 @@ async function initUserWhatsApp(userId) {
             auth: state,
             printQRInTerminal: false,
             logger: pino({ level: 'silent' }),
-            browser: ['AutoMate Cloud', 'Chrome', '124.0.0']
+            browser: Browsers.ubuntu('Chrome')
         });
 
         session.sock = sock;
@@ -419,8 +420,35 @@ app.post('/api/request-pairing-code', requireAuth, pairingCodeLimiter.middleware
     }
 
     try {
+        let activeSession = session;
+        const userSessionDir = getTenantSessionDir(userId);
+        const credsPath = path.join(userSessionDir, 'creds.json');
+        let isRegistered = false;
+        try {
+            if (fs.existsSync(credsPath)) {
+                const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
+                isRegistered = Boolean(creds?.registered);
+            }
+        } catch (_) {}
+
+        // If unlinked and was in QR mode, restart a pristine socket specifically for pairing
+        if (!isRegistered && activeSession.connectionStatus === 'qr_ready') {
+            try { if (activeSession.sock) activeSession.sock.end(); } catch (_) {}
+            if (fs.existsSync(userSessionDir)) {
+                fs.rmSync(userSessionDir, { recursive: true, force: true });
+            }
+            sessions.delete(userId);
+            initUserWhatsApp(userId);
+            activeSession = sessions.get(userId);
+            await new Promise(r => setTimeout(r, 1200));
+        }
+
+        if (!activeSession?.sock) {
+            return res.status(503).json({ error: 'WhatsApp socket is initializing. Please retry in 3 seconds.' });
+        }
+
         console.log(`📱 [User: ${maskUserId(userId)}] Requesting 8-digit pairing code for: ${maskPhone(clean)}`);
-        const code = await session.sock.requestPairingCode(clean);
+        const code = await activeSession.sock.requestPairingCode(clean);
         console.log(`✅ [User: ${maskUserId(userId)}] Pairing code generated successfully.`);
         res.json({ success: true, code, formattedPhone: `+${clean}` });
     } catch (err) {
