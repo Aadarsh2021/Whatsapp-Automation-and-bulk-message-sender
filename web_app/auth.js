@@ -86,6 +86,47 @@ function verifySandboxToken(token) {
 }
 
 /**
+ * Safely masks phone numbers for production logs.
+ * Example: +919876543210 -> +91******3210
+ */
+function maskPhone(phone) {
+    if (!phone || typeof phone !== 'string') return '***';
+    if (phone === 'Connected') return 'Connected';
+    const cleanDigits = phone.split('@')[0].split(':')[0].replace(/\D/g, '');
+    if (cleanDigits.length < 6) return '******';
+    const prefix = cleanDigits.slice(0, 2);
+    const suffix = cleanDigits.slice(-4);
+    return `+${prefix}******${suffix}`;
+}
+
+/**
+ * Safely masks user and device identifiers for production logs.
+ * Preserves correlation prefix/suffix without exposing the full identifier.
+ * Example: usr_test_user_alpha -> usr_test...lpha
+ */
+function maskUserId(userId) {
+    if (!userId || typeof userId !== 'string') return 'usr_anon';
+    const clean = userId.trim();
+    if (clean.length <= 8) return `${clean.slice(0, 3)}***`;
+    const prefix = clean.slice(0, 8);
+    const suffix = clean.slice(-4);
+    return `${prefix}...${suffix}`;
+}
+
+/**
+ * Strips secrets, tokens, JWTs, and sensitive credentials from error messages.
+ */
+function sanitizeErrorMessage(msg) {
+    if (!msg) return 'Error';
+    const str = typeof msg === 'string' ? msg : (msg.message || String(msg));
+    return str
+        .replace(/sb_secret_[a-zA-Z0-9_-]+/g, '[REDACTED_SECRET]')
+        .replace(/eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]+/g, '[REDACTED_JWT]')
+        .replace(/Bearer\s+[a-zA-Z0-9._-]+/gi, 'Bearer [REDACTED]')
+        .replace(/([?&](?:apikey|token|secret|password|key)=)[^&]+/gi, '$1[REDACTED]');
+}
+
+/**
  * Primary Authentication Middleware:
  * Derives user identity strictly from cryptographically verified Bearer tokens.
  * The browser can NEVER choose or forge its identity.
@@ -167,7 +208,7 @@ async function requireAuth(req, res, next) {
     // Defense-in-depth: If client sent an x-user-id header, verify it strictly matches!
     const claimedHeader = req.headers['x-user-id'];
     if (claimedHeader && claimedHeader !== authenticatedTenantId) {
-        console.warn(`🚨 [SECURITY ALERT] Identity Mismatch Attempt! Authenticated: ${authenticatedTenantId}, Claimed: ${claimedHeader}`);
+        console.warn(`🚨 [SECURITY ALERT] Identity Mismatch Attempt! Authenticated: ${maskUserId(authenticatedTenantId)}, Claimed: ${maskUserId(claimedHeader)}`);
         return res.status(403).json({
             error: 'Identity mismatch. Claimed user ID does not match authenticated token identity.',
             code: 'IDENTITY_MISMATCH'
@@ -242,6 +283,9 @@ module.exports = {
     getTenantSessionDir,
     generateSandboxToken,
     verifySandboxToken,
+    maskPhone,
+    maskUserId,
+    sanitizeErrorMessage,
     pairingCodeLimiter,
     messageDispatchLimiter,
     wipeDataLimiter,

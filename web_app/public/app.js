@@ -547,7 +547,7 @@ async function requestPairingCode() {
 
             document.getElementById('modalDisplayPairingCode').textContent = data.code;
             openModal('modalPairingCode');
-            showToast('Pairing code generated successfully.');
+            showToast(`Pairing code generated for ${data.formattedPhone || phoneNumber}. Enter in WhatsApp within 60 seconds.`);
         } else {
             showToast(data.error || 'Failed to generate pairing code');
         }

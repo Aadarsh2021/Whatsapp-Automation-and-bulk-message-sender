@@ -7,6 +7,19 @@ const path = require('path');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 
+/**
+ * Strips secrets, tokens, JWTs, and sensitive credentials from error messages.
+ */
+function sanitizeErrorMessage(msg) {
+    if (!msg) return 'Error';
+    const str = typeof msg === 'string' ? msg : (msg.message || String(msg));
+    return str
+        .replace(/sb_secret_[a-zA-Z0-9_-]+/g, '[REDACTED_SECRET]')
+        .replace(/eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]+/g, '[REDACTED_JWT]')
+        .replace(/Bearer\s+[a-zA-Z0-9._-]+/gi, 'Bearer [REDACTED]')
+        .replace(/([?&](?:apikey|token|secret|password|key)=)[^&]+/gi, '$1[REDACTED]');
+}
+
 let supabase = null;
 if (SUPABASE_KEY && SUPABASE_URL) {
     try {
@@ -15,7 +28,7 @@ if (SUPABASE_KEY && SUPABASE_URL) {
         });
         console.log('⚡ Connected to Supabase Cloud Database');
     } catch (err) {
-        console.error('Supabase initialization error, falling back to local storage:', err.message);
+        console.error('Supabase initialization error, falling back to local storage:', sanitizeErrorMessage(err.message));
     }
 } else {
     console.warn('⚠️ No SUPABASE_KEY provided. Operating in Local Resilient Fallback Mode.');
@@ -66,7 +79,7 @@ async function pingSupabaseHeartbeat() {
         };
     } catch (err) {
         lastHeartbeatStatus = 'error: ' + err.message;
-        console.warn(`⚠️ [Supabase Heartbeat] Heartbeat warning: ${err.message}`);
+        console.warn(`⚠️ [Supabase Heartbeat] Heartbeat warning: ${sanitizeErrorMessage(err.message)}`);
         return {
             success: false,
             error: err.message,
@@ -179,7 +192,7 @@ async function createScheduledTask(task) {
                 error: null
             }]);
         if (!error) return task;
-        console.error('Supabase task insert error:', error.message);
+        console.error('Supabase task insert error:', sanitizeErrorMessage(error.message));
     }
 
     const jobs = getLocalScheduledJobs();
@@ -403,7 +416,7 @@ async function recordFeedback(entry) {
                     created_at: feedbackObj.createdAt
                 }]);
         } catch (err) {
-            console.warn('Supabase feedback insert warning:', err.message);
+            console.warn('Supabase feedback insert warning:', sanitizeErrorMessage(err.message));
         }
     }
 

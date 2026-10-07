@@ -17,6 +17,9 @@ const {
     requireAuth,
     getTenantSessionDir,
     generateSandboxToken,
+    maskPhone,
+    maskUserId,
+    sanitizeErrorMessage,
     pairingCodeLimiter,
     messageDispatchLimiter,
     wipeDataLimiter,
@@ -106,16 +109,16 @@ async function initUserWhatsApp(userId) {
                 try {
                     session.currentQR = await QRCode.toDataURL(qr);
                     session.connectionStatus = 'qr_ready';
-                    console.log(`📌 [User: ${userId}] QR Code ready`);
+                    console.log(`📌 [User: ${maskUserId(userId)}] QR Code ready`);
                 } catch (err) {
-                    console.error(`[User: ${userId}] QR error:`, err);
+                    console.error(`[User: ${maskUserId(userId)}] QR error:`, sanitizeErrorMessage(err.message || err));
                 }
             }
 
             if (connection === 'close') {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-                console.log(`[User: ${userId}] Connection closed (code ${statusCode}). Logged out: ${isLoggedOut}`);
+                console.log(`[User: ${maskUserId(userId)}] Connection closed (code ${statusCode}). Logged out: ${isLoggedOut}`);
 
                 session.connectionStatus = 'disconnected';
                 session.currentQR = null;
@@ -124,7 +127,7 @@ async function initUserWhatsApp(userId) {
 
                 if (isLoggedOut) {
                     // Fail-Safe 1: Clean up unlinked session immediately to prevent infinite reconnect loops
-                    console.log(`🧹 [User: ${userId}] Cleaning unlinked credentials on disk.`);
+                    console.log(`🧹 [User: ${maskUserId(userId)}] Cleaning unlinked credentials on disk.`);
                     if (fs.existsSync(userSessionDir)) {
                         fs.rmSync(userSessionDir, { recursive: true, force: true });
                     }
@@ -141,11 +144,11 @@ async function initUserWhatsApp(userId) {
                     id: sock.user?.id || 'Connected',
                     name: sock.user?.name || `WhatsApp User (${userId})`
                 };
-                console.log(`✅ [User: ${userId}] WhatsApp Connected: ${session.userInfo.id}`);
+                console.log(`✅ [User: ${maskUserId(userId)}] WhatsApp Connected: ${maskPhone(session.userInfo.id)}`);
             }
         });
     } catch (err) {
-        console.error(`Error initializing WhatsApp for ${userId}:`, err);
+        console.error(`Error initializing WhatsApp for ${maskUserId(userId)}:`, sanitizeErrorMessage(err.message || err));
         session.connectionStatus = 'disconnected';
         session.isInitializing = false;
     }
@@ -165,15 +168,15 @@ function restoreSavedSessions() {
                     const userDir = getTenantSessionDir(uid);
                     const credsPath = path.join(userDir, 'creds.json');
                     if (fs.existsSync(credsPath)) {
-                        console.log(`🔄 Auto-restoring session for user: ${uid}`);
+                        console.log(`🔄 Auto-restoring session for user: ${maskUserId(uid)}`);
                         getOrCreateSession(uid);
                     }
                 } catch (e) {
-                    console.warn(`Skipping untrusted session directory: ${uid}`);
+                    console.warn(`Skipping untrusted session directory: ${maskUserId(uid)}`);
                 }
             }
         } catch (err) {
-            console.error('Session restore error:', err);
+            console.error('Session restore error:', sanitizeErrorMessage(err.message || err));
         }
     }
 }
@@ -200,12 +203,12 @@ async function sendBatchMessages(sock, userId, numbers, message) {
             results.push({ number: clean, status: 'sent', time: timestamp });
 
             await db.recordHistory({ userId, number: clean, message, status: 'sent', time: timestamp });
-            console.log(`[User: ${userId}] Sent to +${clean} (${i + 1}/${numbers.length})`);
+            console.log(`[User: ${maskUserId(userId)}] Sent to ${maskPhone(clean)} (${i + 1}/${numbers.length})`);
         } catch (err) {
             // Fail-Safe 6: Isolated per-recipient try/catch (1 bad number never stops the batch)
             results.push({ number: clean, status: 'failed', error: err.message, time: timestamp });
             await db.recordHistory({ userId, number: clean, message, status: 'failed', error: err.message, time: timestamp });
-            console.error(`[User: ${userId}] Failed +${clean}:`, err.message);
+            console.error(`[User: ${maskUserId(userId)}] Failed ${maskPhone(clean)}:`, sanitizeErrorMessage(err.message));
         }
 
         // Anti-Ban Dynamic Jitter Delay (3.0s to 5.5s randomized)
@@ -230,7 +233,7 @@ setInterval(async () => {
 
     for (const job of upcomingJobs) {
         if (!sessions.has(job.userId) || sessions.get(job.userId).connectionStatus !== 'connected') {
-            console.log(`🔥 Pre-warming socket for user: ${job.userId} (due at ${job.scheduleTime})`);
+            console.log(`🔥 Pre-warming socket for user: ${maskUserId(job.userId)} (due at ${job.scheduleTime})`);
             getOrCreateSession(job.userId);
         }
     }
@@ -252,19 +255,19 @@ setInterval(async () => {
         activeWorkers++;
         (async () => {
             try {
-                console.log(`⏰ [Worker: ${workerId}] Executing job ID: ${job.id} for user ${job.userId}`);
+                console.log(`⏰ [Worker: ${workerId}] Executing job ID: ${job.id} for user ${maskUserId(job.userId)}`);
                 const session = sessions.get(job.userId);
 
                 if (!session || session.connectionStatus !== 'connected' || !session.sock) {
                     await db.finalizeJob(job.id, 'failed', [], 'WhatsApp is disconnected on user device.');
-                    console.warn(`[User: ${job.userId}] Scheduled job failed: Disconnected.`);
+                    console.warn(`[User: ${maskUserId(job.userId)}] Scheduled job failed: Disconnected.`);
                 } else {
                     const results = await sendBatchMessages(session.sock, job.userId, job.numbers, job.message);
                     await db.finalizeJob(job.id, 'completed', results, null);
                     console.log(`✅ [Job: ${job.id}] Finished successfully.`);
                 }
             } catch (err) {
-                console.error(`Job ${job.id} execution error:`, err);
+                console.error(`Job ${job.id} execution error:`, sanitizeErrorMessage(err.message || err));
                 await db.finalizeJob(job.id, 'failed', [], err.message);
             } finally {
                 activeWorkers--;
@@ -296,7 +299,7 @@ function triggerRenderPing() {
 
         req.on('error', (err) => {
             lastKeepAliveStatus = 'warning: ' + err.message;
-            console.warn(`⚠️ [Render Keep-Alive] Ping notice: ${err.message}`);
+            console.warn(`⚠️ [Render Keep-Alive] Ping notice: ${sanitizeErrorMessage(err.message)}`);
         });
 
         req.on('timeout', () => {
@@ -304,7 +307,7 @@ function triggerRenderPing() {
             lastKeepAliveStatus = 'timeout';
         });
     } catch (err) {
-        console.error('Render Keep-Alive trigger error:', err);
+        console.error('Render Keep-Alive trigger error:', sanitizeErrorMessage(err.message || err));
     }
 }
 
@@ -394,10 +397,18 @@ app.post('/api/request-pairing-code', requireAuth, pairingCodeLimiter.middleware
     }
 
     let clean = phoneNumber.replace(/\D/g, '');
+    // Strip leading zeroes (e.g. 09876543210 -> 9876543210)
+    if (clean.startsWith('0')) clean = clean.replace(/^0+/, '');
+    // Strip duplicate country code if user typed 91 when 91 was already present (e.g. 91919876543210)
+    if (clean.length === 12 && clean.startsWith('9191')) {
+        clean = clean.slice(2);
+    }
+    // Auto-prefix Indian country code if 10-digit number is provided
+    if (clean.length === 10) clean = '91' + clean;
+
     if (clean.length < 8 || clean.length > 15) {
         return res.status(400).json({ error: 'Phone number must be between 8 and 15 digits including country code.' });
     }
-    if (clean.length === 10) clean = '91' + clean;
 
     if (!session.sock) {
         return res.status(503).json({ error: 'WhatsApp socket is initializing. Please retry in 3 seconds.' });
@@ -408,12 +419,12 @@ app.post('/api/request-pairing-code', requireAuth, pairingCodeLimiter.middleware
     }
 
     try {
-        console.log(`📱 [User: ${userId}] Requesting 8-digit pairing code for: +${clean}`);
+        console.log(`📱 [User: ${maskUserId(userId)}] Requesting 8-digit pairing code for: ${maskPhone(clean)}`);
         const code = await session.sock.requestPairingCode(clean);
-        console.log(`✅ [User: ${userId}] Pairing code generated: ${code}`);
-        res.json({ success: true, code });
+        console.log(`✅ [User: ${maskUserId(userId)}] Pairing code generated successfully.`);
+        res.json({ success: true, code, formattedPhone: `+${clean}` });
     } catch (err) {
-        console.error(`[User: ${userId}] Pairing code error:`, err);
+        console.error(`[User: ${maskUserId(userId)}] Pairing code error:`, sanitizeErrorMessage(err.message || err));
         res.status(500).json({ error: 'Failed to generate pairing code. Please retry.' });
     }
 });
@@ -487,7 +498,7 @@ app.post('/api/send-now', requireAuth, messageDispatchLimiter.middleware(req => 
         return res.status(400).json({ error: 'WhatsApp is not connected. Please link WhatsApp first.' });
     }
 
-    sendBatchMessages(session.sock, userId, numbers, message.trim()).catch((e) => console.error(`[User: ${userId}] Batch error:`, e));
+    sendBatchMessages(session.sock, userId, numbers, message.trim()).catch((e) => console.error(`[User: ${maskUserId(userId)}] Batch error:`, sanitizeErrorMessage(e.message || e)));
 
     res.json({
         success: true,
@@ -630,7 +641,7 @@ app.post('/api/feedback', requireAuth, async (req, res) => {
             message: 'Thank you! Your feedback helps us improve AutoMate Cloud.'
         });
     } catch (err) {
-        console.error('Feedback submission error:', err);
+        console.error('Feedback submission error:', sanitizeErrorMessage(err.message || err));
         res.status(500).json({ error: 'Failed to record feedback.' });
     }
 });
