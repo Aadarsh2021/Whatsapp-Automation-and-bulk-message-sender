@@ -221,6 +221,34 @@ async function requireAuth(req, res, next) {
     next();
 }
 
+// ================= RBAC: ADMIN ROLE ENFORCEMENT =================
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'thakuraadarsh1@gmail.com')
+    .split(',')
+    .map(e => e.trim().toLowerCase());
+
+/**
+ * Admin Authorization Guard:
+ * Strictly enforces that only authorized admin emails can access administrative endpoints.
+ */
+function requireAdmin(req, res, next) {
+    if (!req.user || !req.user.email) {
+        return res.status(403).json({
+            error: 'Access denied. Administrator privileges required.',
+            code: 'FORBIDDEN_ADMIN_REQUIRED'
+        });
+    }
+
+    const email = req.user.email.toLowerCase();
+    if (!ADMIN_EMAILS.includes(email)) {
+        return res.status(403).json({
+            error: 'Access denied. You do not have administrator permissions.',
+            code: 'FORBIDDEN_NOT_ADMIN'
+        });
+    }
+
+    next();
+}
+
 // ================= IN-MEMORY RATE LIMITERS =================
 // Lightweight sliding-window rate limiters to prevent resource exhaustion
 
@@ -279,6 +307,8 @@ const generalApiLimiter = new RateLimiter(60 * 1000, 120, 'API Requests'); // 12
 
 module.exports = {
     requireAuth,
+    requireAdmin,
+    ADMIN_EMAILS,
     sanitizeTenantId,
     getTenantSessionDir,
     generateSandboxToken,

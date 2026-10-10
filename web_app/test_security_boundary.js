@@ -322,7 +322,48 @@ async function runSecuritySuite() {
         assert(!found.userEmail.includes('john.doe'), 'Original username must not be exposed');
     });
 
-    // Test 13: Clean cleanup: cancel User A test task
+    // Test 13: RBAC: Non-admin users are strictly denied on /api/admin/* endpoints
+    await test('RBAC Guard: Non-admin user access to /api/admin/* -> Denied (HTTP 403)', async () => {
+        const endpoints = ['/api/admin/overview', '/api/admin/users', '/api/admin/feedback'];
+        for (const ep of endpoints) {
+            const res = await makeRequest({
+                path: ep,
+                headers: { 'Authorization': `Bearer ${userA_Token}` }
+            });
+            assert.strictEqual(res.status, 403, `${ep} must return 403 Forbidden for non-admin`);
+            assert.strictEqual(res.body.code, 'FORBIDDEN_NOT_ADMIN');
+        }
+    });
+
+    // Test 14: RBAC: Authorized admin email accesses /api/admin/* successfully
+    await test('RBAC Guard: Authorized Admin (thakuraadarsh1@gmail.com) -> Allowed (HTTP 200)', async () => {
+        const adminToken = auth.generateSandboxToken('admin_unit_test', 'thakuraadarsh1@gmail.com');
+        const resOverview = await makeRequest({
+            path: '/api/admin/overview',
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        assert.strictEqual(resOverview.status, 200);
+        assert.strictEqual(resOverview.body.success, true);
+        assert(resOverview.body.analytics, 'Analytics object must be returned');
+
+        const resUsers = await makeRequest({
+            path: '/api/admin/users',
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        assert.strictEqual(resUsers.status, 200);
+        assert.strictEqual(resUsers.body.success, true);
+        assert(Array.isArray(resUsers.body.users), 'Users directory array must be returned');
+
+        const resFb = await makeRequest({
+            path: '/api/admin/feedback',
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        assert.strictEqual(resFb.status, 200);
+        assert.strictEqual(resFb.body.success, true);
+        assert(Array.isArray(resFb.body.feedback), 'Feedback list array must be returned');
+    });
+
+    // Test 15: Clean cleanup: cancel User A test task
     if (userA_JobId) {
         await test('User A cancels own task -> Success', async () => {
             const res = await makeRequest({
@@ -335,7 +376,7 @@ async function runSecuritySuite() {
         });
     }
 
-    // Teardown
+    // Teardown: Clean up temporary session directories and test artifacts
     server.close();
     try {
         const testDirs = [
@@ -346,6 +387,26 @@ async function runSecuritySuite() {
             if (fs.existsSync(dir)) {
                 fs.rmSync(dir, { recursive: true, force: true });
             }
+        }
+        // Clean test feedback & history from local store
+        const fbPath = path.resolve(__dirname, 'data', 'feedback.json');
+        if (fs.existsSync(fbPath)) {
+            const list = JSON.parse(fs.readFileSync(fbPath, 'utf8'));
+            const cleaned = list.filter(f => f.deviceId !== `usr_${userA_Id}`);
+            fs.writeFileSync(fbPath, JSON.stringify(cleaned, null, 2), 'utf8');
+        }
+        const histPath = path.resolve(__dirname, 'data', 'history.json');
+        if (fs.existsSync(histPath)) {
+            const list = JSON.parse(fs.readFileSync(histPath, 'utf8'));
+            const cleaned = list.filter(h => h.deviceId !== `usr_${userA_Id}`);
+            fs.writeFileSync(histPath, JSON.stringify(cleaned, null, 2), 'utf8');
+        }
+
+        // Clean test feedback from Supabase if connected
+        if (db.isSupabaseConnected() && (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY)) {
+            const { createClient } = require('@supabase/supabase-js');
+            const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY);
+            await sb.from('user_feedback').delete().eq('device_id', `usr_${userA_Id}`);
         }
     } catch (_) {}
 

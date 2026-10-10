@@ -461,6 +461,95 @@ async function getRecentFeedback(limit = 20) {
     }));
 }
 
+// 10. Admin Analytics & Management Operations
+async function getAdminUsersList() {
+    if (supabase) {
+        try {
+            const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
+            if (!error && data?.users) {
+                return data.users.map(u => ({
+                    id: u.id,
+                    email: u.email,
+                    provider: u.app_metadata?.provider || 'google',
+                    providers: u.app_metadata?.providers || ['google'],
+                    createdAt: u.created_at,
+                    lastSignInAt: u.last_sign_in_at || u.created_at
+                }));
+            }
+        } catch (err) {
+            console.warn('Admin user list query warning:', sanitizeErrorMessage(err.message));
+        }
+    }
+    return [];
+}
+
+async function getAdminAllFeedback(limit = 100) {
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from('user_feedback')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(limit);
+            if (!error && data) {
+                return data.map(r => ({
+                    id: r.id,
+                    deviceId: r.device_id,
+                    userEmail: r.user_email || 'Anonymous',
+                    rating: r.rating,
+                    category: r.category,
+                    comment: r.comment,
+                    createdAt: r.created_at
+                }));
+            }
+        } catch (err) {
+            console.warn('Admin feedback query warning:', sanitizeErrorMessage(err.message));
+        }
+    }
+    return getLocalFeedback().slice(0, limit);
+}
+
+async function getAdminStats() {
+    let taskCount = 0;
+    let historyCount = 0;
+    let feedbackCount = 0;
+    let avgRating = 5.0;
+
+    if (supabase) {
+        try {
+            const [tRes, hRes, fRes] = await Promise.all([
+                supabase.from('scheduled_tasks').select('id', { count: 'exact', head: true }),
+                supabase.from('delivery_history').select('id', { count: 'exact', head: true }),
+                supabase.from('user_feedback').select('rating')
+            ]);
+            taskCount = tRes.count || 0;
+            historyCount = hRes.count || 0;
+            if (fRes.data && fRes.data.length > 0) {
+                feedbackCount = fRes.data.length;
+                const totalRating = fRes.data.reduce((acc, curr) => acc + (curr.rating || 5), 0);
+                avgRating = Number((totalRating / feedbackCount).toFixed(1));
+            }
+        } catch (err) {
+            console.warn('Admin stats query warning:', sanitizeErrorMessage(err.message));
+        }
+    } else {
+        taskCount = getLocalScheduledJobs().length;
+        historyCount = getLocalHistory().length;
+        const localFb = getLocalFeedback();
+        feedbackCount = localFb.length;
+        if (feedbackCount > 0) {
+            avgRating = Number((localFb.reduce((a, b) => a + (b.rating || 5), 0) / feedbackCount).toFixed(1));
+        }
+    }
+
+    return {
+        taskCount,
+        historyCount,
+        feedbackCount,
+        avgRating
+    };
+}
+
 module.exports = {
     getScheduledTasksForDevice,
     createScheduledTask,
@@ -473,6 +562,9 @@ module.exports = {
     wipeAllDeviceData,
     recordFeedback,
     getRecentFeedback,
+    getAdminUsersList,
+    getAdminAllFeedback,
+    getAdminStats,
     isSupabaseConnected: () => !!supabase,
     verifyUserToken: async (token) => {
         if (!supabase) return { data: { user: null }, error: new Error('Supabase client not initialized') };

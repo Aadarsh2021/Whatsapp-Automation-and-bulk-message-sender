@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
 </head>
 <body>
     <div class="app-layout">
@@ -47,6 +48,11 @@
                     <svg viewBox="0 0 24 24" width="15" height="15" fill="#f7a831" stroke="#f7a831" stroke-width="1"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                     <span class="feedback-text">Reviews</span>
                 </button>
+                <!-- Admin Portal Link (Visible only to authorized admin) -->
+                <a id="adminPortalNavBtn" href="admin.html" class="admin-portal-btn" style="display: none;" title="Admin Analytics & Management Console">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    <span>Admin</span>
+                </a>
                 <!-- Google Sign-In Button (Logged Out state) -->
                 <button id="googleAuthBtn" class="google-auth-btn" onclick="openAuthModal()" title="Sign in with Google for cloud backup & security">
                     <svg class="google-svg" viewBox="0 0 24 24" width="16" height="16">

@@ -16,6 +16,8 @@ const {
 const db = require('./db');
 const {
     requireAuth,
+    requireAdmin,
+    ADMIN_EMAILS,
     getTenantSessionDir,
     generateSandboxToken,
     maskPhone,
@@ -46,6 +48,7 @@ app.use(cors());
 app.use(express.json({ limit: '500kb' }));
 app.use(express.urlencoded({ extended: true, limit: '500kb' }));
 app.use('/api/', generalApiLimiter.middleware(req => req.ip));
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Local Session Storage directory
@@ -614,7 +617,8 @@ app.get('/api/auth/config', (req, res) => {
     res.json({
         supabaseUrl: process.env.SUPABASE_URL || '',
         supabaseAnonKey: process.env.SUPABASE_ANON_KEY || '',
-        isLocalFallback: !db.isSupabaseConnected()
+        isLocalFallback: !db.isSupabaseConnected(),
+        adminEmails: ADMIN_EMAILS
     });
 });
 
@@ -682,6 +686,65 @@ app.get('/api/feedback', async (req, res) => {
         res.json(list);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// ================= ADMIN DASHBOARD & ANALYTICS ENDPOINTS =================
+
+// Admin Overview Metrics (Protected: Auth + Admin)
+app.get('/api/admin/overview', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const stats = await db.getAdminStats();
+        const users = await db.getAdminUsersList();
+        const sbInfo = db.getLastHeartbeatInfo();
+
+        res.json({
+            success: true,
+            analytics: {
+                totalUsers: users.length,
+                activeSockets: sessions.size,
+                totalTasks: stats.taskCount,
+                totalDispatched: stats.historyCount,
+                totalFeedback: stats.feedbackCount,
+                averageRating: stats.avgRating,
+                uptimeSeconds: Math.round(process.uptime()),
+                memoryUsageMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+                keepAlivePings: keepAlivePingCount,
+                supabaseConnected: db.isSupabaseConnected(),
+                supabaseHeartbeat: sbInfo.lastHeartbeat,
+                serverTimestamp: new Date().toISOString()
+            }
+        });
+    } catch (err) {
+        console.error('Admin overview error:', sanitizeErrorMessage(err.message || err));
+        res.status(500).json({ error: 'Failed to load admin overview metrics.' });
+    }
+});
+
+// Admin Users List (Protected: Auth + Admin)
+app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const users = await db.getAdminUsersList();
+        const enrichedUsers = users.map(u => ({
+            ...u,
+            isSessionActive: sessions.has(`usr_${u.id}`) || sessions.has(u.id)
+        }));
+        res.json({ success: true, count: enrichedUsers.length, users: enrichedUsers });
+    } catch (err) {
+        console.error('Admin users error:', sanitizeErrorMessage(err.message || err));
+        res.status(500).json({ error: 'Failed to load registered users directory.' });
+    }
+});
+
+// Admin Full Unmasked Feedback (Protected: Auth + Admin)
+app.get('/api/admin/feedback', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const limit = Math.min(200, parseInt(req.query.limit) || 100);
+        const feedback = await db.getAdminAllFeedback(limit);
+        res.json({ success: true, count: feedback.length, feedback });
+    } catch (err) {
+        console.error('Admin feedback error:', sanitizeErrorMessage(err.message || err));
+        res.status(500).json({ error: 'Failed to load user feedbacks.' });
     }
 });
 

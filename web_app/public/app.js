@@ -67,6 +67,9 @@ async function initAuth() {
     try {
         const res = await fetch('/api/auth/config');
         const config = await res.json();
+        if (config.adminEmails && Array.isArray(config.adminEmails)) {
+            window.adminEmailsList = config.adminEmails.map(e => e.toLowerCase());
+        }
 
         if (window.supabase && config.supabaseUrl && config.supabaseAnonKey) {
             supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
@@ -138,6 +141,7 @@ function applyAuthenticatedUser(user, reloadData = true, token = null) {
     const profileBadge = document.getElementById('userProfileBadge');
     const avatarImg = document.getElementById('userAvatarImg');
     const nameSpan = document.getElementById('userDisplayName');
+    const adminNavBtn = document.getElementById('adminPortalNavBtn');
     
     if (authBtn) authBtn.style.display = 'none';
     if (profileBadge) profileBadge.style.display = 'inline-flex';
@@ -146,6 +150,14 @@ function applyAuthenticatedUser(user, reloadData = true, token = null) {
     }
     if (nameSpan) {
         nameSpan.textContent = user.name || 'User';
+    }
+
+    // Show Admin Portal link if user email matches authorized admins
+    const userEmail = (user.email || '').toLowerCase();
+    const adminList = window.adminEmailsList || ['thakuraadarsh1@gmail.com'];
+    const isAdmin = userEmail && adminList.includes(userEmail);
+    if (adminNavBtn) {
+        adminNavBtn.style.display = isAdmin ? 'inline-flex' : 'none';
     }
 
     // Unlock WhatsApp Connect section
@@ -178,8 +190,10 @@ function applyGuestUser() {
 
     const authBtn = document.getElementById('googleAuthBtn');
     const profileBadge = document.getElementById('userProfileBadge');
+    const adminNavBtn = document.getElementById('adminPortalNavBtn');
     if (authBtn) authBtn.style.display = 'inline-flex';
     if (profileBadge) profileBadge.style.display = 'none';
+    if (adminNavBtn) adminNavBtn.style.display = 'none';
 
     // Lock WhatsApp QR / pairing code controls behind Google Sign-in Gate
     const authGate = document.getElementById('authRequiredGate');
@@ -191,6 +205,11 @@ function applyGuestUser() {
     const statusText = document.getElementById('statusText');
     if (statusBadge) statusBadge.className = 'status-badge disconnected';
     if (statusText) statusText.textContent = 'Login Required';
+
+    cachedJobs = [];
+    cachedHistory = [];
+    loadScheduledJobs();
+    loadHistory();
 }
 
 async function signInWithGoogle() {
@@ -320,8 +339,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initAuth();
     pollStatus();
     setInterval(pollStatus, 3000);
-    loadScheduledJobs();
-    loadHistory();
     updateChatPreview();
 
     // Event listeners
@@ -919,15 +936,31 @@ async function executeDispatchFromModal() {
 // ================= SCHEDULED TASKS & DETAILS MODAL =================
 
 async function loadScheduledJobs() {
+    const container = document.getElementById('scheduledJobsList');
+    const badge = document.getElementById('scheduledCountBadge');
+
+    if (!authenticatedUser && !currentAccessToken) {
+        cachedJobs = [];
+        if (badge) badge.textContent = '0';
+        if (container) {
+            container.innerHTML = '<p class="empty-state">Please sign in with Google to view scheduled tasks.</p>';
+        }
+        return;
+    }
+
     try {
         const res = await apiFetch('/api/scheduled');
-        cachedJobs = await res.json();
+        if (!res.ok) {
+            cachedJobs = [];
+        } else {
+            const data = await res.json();
+            cachedJobs = Array.isArray(data) ? data : [];
+        }
 
-        const container = document.getElementById('scheduledJobsList');
-        const badge = document.getElementById('scheduledCountBadge');
-        const pendingJobs = cachedJobs.filter(j => j.status === 'pending');
-        badge.textContent = pendingJobs.length;
+        const pendingJobs = cachedJobs.filter(j => j && j.status === 'pending');
+        if (badge) badge.textContent = pendingJobs.length;
 
+        if (!container) return;
         if (cachedJobs.length === 0) {
             container.innerHTML = '<p class="empty-state">No scheduled tasks pending.</p>';
             return;
@@ -1038,7 +1071,12 @@ function renderFilteredHistory() {
     const tbody = document.getElementById('historyTableBody');
     if (!tbody) return;
 
-    let list = cachedHistory || [];
+    if (!authenticatedUser && !currentAccessToken) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Please sign in with Google to view delivery logs.</td></tr>';
+        return;
+    }
+
+    let list = Array.isArray(cachedHistory) ? cachedHistory : [];
 
     if (currentHistoryFilterStatus !== 'all') {
         list = list.filter(item => (item.status || '').toLowerCase() === currentHistoryFilterStatus);
@@ -1076,12 +1114,25 @@ function renderFilteredHistory() {
 }
 
 async function loadHistory() {
+    if (!authenticatedUser && !currentAccessToken) {
+        cachedHistory = [];
+        renderFilteredHistory();
+        return;
+    }
+
     try {
         const res = await apiFetch('/api/history');
-        cachedHistory = await res.json();
+        if (!res.ok) {
+            cachedHistory = [];
+        } else {
+            const data = await res.json();
+            cachedHistory = Array.isArray(data) ? data : [];
+        }
         renderFilteredHistory();
     } catch (err) {
         console.error('Failed to load history:', err);
+        cachedHistory = [];
+        renderFilteredHistory();
     }
 }
 
