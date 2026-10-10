@@ -4,8 +4,11 @@ const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pnjoqcmqlmpnvvehkixr.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
+    || process.env.SUPABASE_KEY
+    || process.env.SUPABASE_SECRET_KEY
+    || process.env.SUPABASE_ANON_KEY;
 
 /**
  * Strips secrets, tokens, JWTs, and sensitive credentials from error messages.
@@ -466,6 +469,9 @@ async function getAdminUsersList() {
     if (supabase) {
         try {
             const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
+            if (error) {
+                console.error('🚨 [Supabase Admin] listUsers returned error:', sanitizeErrorMessage(error.message || error));
+            }
             if (!error && data?.users) {
                 return data.users.map(u => ({
                     id: u.id,
