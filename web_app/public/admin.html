@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AutoMate Cloud - Admin Analytics & User Management</title>
-    <meta name="description" content="Centralized Administrator Portal for AutoMate Cloud. Monitor real-time platform analytics, user accounts, and direct customer feedback.">
+    <title>AutoMate Cloud - Admin Analytics & Realtime Management</title>
+    <meta name="description" content="Centralized Administrator Portal for AutoMate Cloud. Monitor real-time platform analytics, user accounts, and direct customer feedback with live Supabase synchronization.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -21,6 +21,22 @@
         @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
+        }
+
+        @keyframes highlightNew {
+            0% {
+                box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.9), 0 6px 20px rgba(0, 168, 132, 0.4);
+                transform: scale(1.025);
+            }
+            100% {
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+                transform: scale(1);
+            }
+        }
+
+        .card-highlight-new {
+            animation: highlightNew 2.5s ease-out;
+            border-color: var(--accent) !important;
         }
 
         .admin-header-badge {
@@ -42,6 +58,45 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        /* Realtime Status Badge */
+        .realtime-status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11.5px;
+            font-weight: 600;
+            padding: 5px 12px;
+            border-radius: 16px;
+            transition: all 0.25s ease;
+        }
+
+        .realtime-status-pill.connected {
+            background: rgba(16, 185, 129, 0.14);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        .realtime-status-pill.connecting {
+            background: rgba(245, 158, 11, 0.14);
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
+
+        .realtime-status-pill.disconnected {
+            background: rgba(239, 68, 68, 0.14);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .realtime-pulse-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: radarPulse 1.8s infinite;
         }
 
         .nav-btn-link {
@@ -436,7 +491,7 @@
             display: flex;
             flex-direction: column;
             gap: 10px;
-            transition: all 0.2s ease;
+            transition: all 0.25s ease;
         }
 
         .admin-feedback-card:hover {
@@ -528,12 +583,18 @@
                         <h1>AutoMate</h1>
                         <span class="admin-header-badge">👑 Master Admin Portal</span>
                     </div>
-                    <p class="tagline">System Telemetry, User Directory &amp; Feedback Insights</p>
+                    <p class="tagline">Live Supabase Telemetry, User Directory &amp; Realtime Insights</p>
                 </div>
             </div>
 
             <div class="admin-nav-actions">
-                <button class="nav-btn-link refresh-btn" onclick="fetchAdminData()" title="Reload Analytics & Records">
+                <!-- Live Supabase Realtime Status Badge -->
+                <div id="realtimeStatusBadge" class="realtime-status-pill connecting" title="Supabase WebSocket Realtime Connection Status">
+                    <span class="realtime-pulse-dot"></span>
+                    <span id="realtimeStatusText">Supabase: Connecting...</span>
+                </div>
+
+                <button class="nav-btn-link refresh-btn" onclick="fetchAdminData(false)" title="Reload Analytics & Records">
                     <svg id="refreshIconSvg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                     <span>Refresh</span>
                 </button>
@@ -564,9 +625,18 @@
                 <p style="font-size: 14px; color: var(--text-secondary); line-height: 1.5; margin: 0 0 24px;">
                     This console is strictly reserved for the system owner (<strong>thakuraadarsh1@gmail.com</strong>). Please sign in using an authorized administrator Google account to inspect telemetry, users, and feedbacks.
                 </p>
-                <div style="display: flex; gap: 12px; width: 100%; justify-content: center;">
-                    <a href="index.html" class="primary-btn glow-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
-                        <span>Return to Sign In</span>
+                <div style="display: flex; gap: 12px; width: 100%; justify-content: center; flex-wrap: wrap;">
+                    <button class="primary-btn glow-btn" onclick="signInAdminWithGoogle()" style="display: inline-flex; align-items: center; gap: 8px;">
+                        <svg viewBox="0 0 24 24" width="16" height="16">
+                            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                        </svg>
+                        <span>Sign in with Google</span>
+                    </button>
+                    <a href="index.html" class="secondary-btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                        <span>Return to Main App</span>
                     </a>
                 </div>
             </div>
@@ -706,7 +776,7 @@
                             <span>💬 Unmasked Customer Feedback</span>
                         </h2>
                         <p style="font-size: 12.5px; color: var(--text-secondary); margin: 3px 0 0;">
-                            Direct ratings, bug reports, and suggestions submitted by your platform users.
+                            Live customer reviews, bug reports, and suggestions streaming in real-time from Supabase.
                         </p>
                     </div>
                     <div>
@@ -743,11 +813,12 @@
         <div id="toastNotification" class="toast"></div>
     </div>
 
-    <!-- Official Supabase JS SDK for Token Extraction -->
+    <!-- Official Supabase JS SDK for Token Extraction & Realtime WebSockets -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
         // ================= STATE & GLOBALS =================
         let supabaseClient = null;
+        let realtimeChannel = null;
         let adminToken = null;
         let rawUsersList = [];
         let rawFeedbackList = [];
@@ -780,7 +851,7 @@
             if (!t) return;
             t.textContent = msg;
             t.className = 'toast show';
-            setTimeout(() => { t.className = 'toast'; }, 3200);
+            setTimeout(() => { t.className = 'toast'; }, 3400);
         }
 
         // ================= AUTH & RBAC VERIFICATION =================
@@ -795,15 +866,34 @@
 
                 if (window.supabase && config.supabaseUrl && config.supabaseAnonKey) {
                     supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+
+                    // Check active Supabase session
                     const { data: { session } } = await supabaseClient.auth.getSession();
                     if (session && session.user) {
                         const email = (session.user.email || '').toLowerCase();
                         if (adminEmailsList.includes(email)) {
                             adminToken = session.access_token;
                             grantAdminAccess(session.user);
+                            setupSupabaseRealtime();
                             return;
                         }
                     }
+
+                    // Listen for Supabase OAuth login events in realtime
+                    supabaseClient.auth.onAuthStateChange((event, session) => {
+                        if (session && session.user) {
+                            const email = (session.user.email || '').toLowerCase();
+                            if (adminEmailsList.includes(email)) {
+                                adminToken = session.access_token;
+                                grantAdminAccess(session.user);
+                                setupSupabaseRealtime();
+                            } else {
+                                showAccessDenied();
+                            }
+                        } else if (event === 'SIGNED_OUT') {
+                            showAccessDenied();
+                        }
+                    });
                 }
 
                 // Check demo/sandbox login in local development
@@ -815,6 +905,7 @@
                         if (adminEmailsList.includes(email) || email.includes('admin') || config.isLocalFallback) {
                             adminToken = parsed.token;
                             grantAdminAccess(parsed);
+                            setupSupabaseRealtime();
                             return;
                         }
                     } catch (_) {}
@@ -827,9 +918,30 @@
             }
         }
 
+        async function signInAdminWithGoogle() {
+            if (!supabaseClient) {
+                showToast('Initializing secure Google login...');
+                return;
+            }
+            try {
+                const { error } = await supabaseClient.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.href
+                    }
+                });
+                if (error) {
+                    showToast('Google login error: ' + error.message);
+                }
+            } catch (err) {
+                showToast('OAuth dispatch error: ' + err.message);
+            }
+        }
+
         function showAccessDenied() {
             document.getElementById('accessDeniedGate').style.display = 'flex';
             document.getElementById('adminMainContent').style.display = 'none';
+            updateRealtimeStatus('disconnected');
         }
 
         function grantAdminAccess(user) {
@@ -846,13 +958,119 @@
                 avatarImg.src = user.avatar || user.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=00a884&color=fff`;
             }
 
-            fetchAdminData();
+            fetchAdminData(false);
+        }
+
+        // ================= SUPABASE REALTIME SYNC =================
+        function setupSupabaseRealtime() {
+            if (!supabaseClient) return;
+
+            if (realtimeChannel) {
+                try { supabaseClient.removeChannel(realtimeChannel); } catch (_) {}
+            }
+
+            updateRealtimeStatus('connecting');
+
+            try {
+                realtimeChannel = supabaseClient
+                    .channel('admin-realtime-room')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'user_feedback' }, (payload) => {
+                        console.log('⚡ [Realtime Supabase] Feedback Event:', payload);
+                        handleRealtimeFeedbackEvent(payload);
+                    })
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'scheduled_tasks' }, (payload) => {
+                        console.log('⚡ [Realtime Supabase] Task Event:', payload);
+                        fetchAdminData(true);
+                        showToast('⚡ Realtime: Scheduled task updated in Supabase');
+                    })
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_history' }, (payload) => {
+                        console.log('⚡ [Realtime Supabase] History Event:', payload);
+                        fetchAdminData(true);
+                        showToast('⚡ Realtime: Delivery history logged in Supabase');
+                    })
+                    .subscribe((status) => {
+                        console.log('⚡ [Realtime Supabase Status]:', status);
+                        if (status === 'SUBSCRIBED') {
+                            updateRealtimeStatus('connected');
+                        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                            updateRealtimeStatus('disconnected');
+                        } else {
+                            updateRealtimeStatus('connecting');
+                        }
+                    });
+            } catch (err) {
+                console.warn('Realtime subscription notice:', err.message);
+                updateRealtimeStatus('disconnected');
+            }
+        }
+
+        function updateRealtimeStatus(status) {
+            const badge = document.getElementById('realtimeStatusBadge');
+            const text = document.getElementById('realtimeStatusText');
+            if (!badge || !text) return;
+
+            if (status === 'connected' || status === 'SUBSCRIBED') {
+                badge.className = 'realtime-status-pill connected';
+                text.textContent = '🟢 Supabase: Live Realtime';
+            } else if (status === 'connecting') {
+                badge.className = 'realtime-status-pill connecting';
+                text.textContent = '🟡 Supabase: Connecting...';
+            } else {
+                badge.className = 'realtime-status-pill disconnected';
+                text.textContent = '⚪ Supabase: Syncing (10s Loop)';
+            }
+        }
+
+        function handleRealtimeFeedbackEvent(payload) {
+            if (payload.eventType === 'INSERT' && payload.new) {
+                const item = {
+                    id: payload.new.id,
+                    deviceId: payload.new.device_id,
+                    userEmail: payload.new.user_email || 'Anonymous',
+                    rating: payload.new.rating,
+                    category: payload.new.category,
+                    comment: payload.new.comment,
+                    createdAt: payload.new.created_at,
+                    _isNew: true
+                };
+
+                // Check if already in list
+                const exists = rawFeedbackList.some(f => String(f.id) === String(item.id));
+                if (!exists) {
+                    rawFeedbackList.unshift(item);
+                    renderFeedbackCards();
+                    const badge = document.getElementById('tabBadgeFeedback');
+                    if (badge) badge.textContent = rawFeedbackList.length;
+
+                    // Increment stats
+                    const currentReviewStr = document.getElementById('statReviewsCount')?.textContent || '0';
+                    const currentCount = parseInt(currentReviewStr) || rawFeedbackList.length;
+                    const newCount = currentCount + 1;
+                    if (document.getElementById('statReviewsCount')) {
+                        document.getElementById('statReviewsCount').textContent = `${newCount} customer reviews`;
+                    }
+                    const sum = rawFeedbackList.reduce((acc, f) => acc + (f.rating || 5), 0);
+                    const avg = (sum / rawFeedbackList.length).toFixed(1);
+                    if (document.getElementById('statRating')) {
+                        document.getElementById('statRating').textContent = avg + ' ★';
+                    }
+
+                    showToast(`🔔 New Live Feedback (${item.rating}★): "${item.comment.slice(0, 32)}..."`);
+                }
+            } else if (payload.eventType === 'DELETE' && payload.old) {
+                rawFeedbackList = rawFeedbackList.filter(f => String(f.id) !== String(payload.old.id));
+                renderFeedbackCards();
+                const badge = document.getElementById('tabBadgeFeedback');
+                if (badge) badge.textContent = rawFeedbackList.length;
+            } else {
+                fetchAdminData(true);
+            }
         }
 
         // ================= DATA FETCHING =================
-        async function fetchAdminData() {
+        async function fetchAdminData(isSilent = false) {
             const refreshIcon = document.getElementById('refreshIconSvg');
-            if (refreshIcon) refreshIcon.style.animation = 'spin 0.8s linear infinite';
+            if (refreshIcon && !isSilent) refreshIcon.style.animation = 'spin 0.8s linear infinite';
 
             try {
                 const headers = {
@@ -882,19 +1100,21 @@
                 if (usersData.success && usersData.users) {
                     rawUsersList = usersData.users;
                     renderUsersTable(rawUsersList);
-                    document.getElementById('tabBadgeUsers').textContent = rawUsersList.length;
+                    const badge = document.getElementById('tabBadgeUsers');
+                    if (badge) badge.textContent = rawUsersList.length;
                 }
 
                 if (feedbackData.success && feedbackData.feedback) {
                     rawFeedbackList = feedbackData.feedback;
                     renderFeedbackCards();
-                    document.getElementById('tabBadgeFeedback').textContent = rawFeedbackList.length;
+                    const badge = document.getElementById('tabBadgeFeedback');
+                    if (badge) badge.textContent = rawFeedbackList.length;
                 }
 
-                showToast('Analytics & user records updated.');
+                if (!isSilent) showToast('Live analytics & Supabase records updated.');
             } catch (err) {
                 console.error('Error fetching admin data:', err);
-                showToast('Failed to refresh data: ' + err.message);
+                if (!isSilent) showToast('Failed to refresh data: ' + err.message);
             } finally {
                 if (refreshIcon) refreshIcon.style.animation = 'none';
             }
@@ -927,7 +1147,7 @@
             if (!tbody) return;
 
             if (!users || users.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="empty-state-notice">No registered users found in database.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="6" class="empty-state-notice">No registered users found in Supabase database.</td></tr>`;
                 return;
             }
 
@@ -1033,9 +1253,10 @@
                 const createdDate = new Date(item.createdAt).toLocaleString(undefined, {
                     month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
                 });
+                const highlightClass = item._isNew ? 'card-highlight-new' : '';
 
                 return `
-                    <div class="admin-feedback-card">
+                    <div class="admin-feedback-card ${highlightClass}">
                         <div class="feedback-card-top">
                             <div class="feedback-stars-display">${starStr}</div>
                             <span class="feedback-cat-tag ${catClass}">${escapeHtml(item.category || 'General')}</span>
@@ -1092,12 +1313,12 @@
         // Initialize when DOM loads
         document.addEventListener('DOMContentLoaded', () => {
             initAdminAuth();
-            // Recurring 30s background poll
+            // Realtime Auto-Sync Loop (every 10 seconds silent background check)
             setInterval(() => {
                 if (document.visibilityState === 'visible' && adminToken) {
-                    fetchAdminData();
+                    fetchAdminData(true);
                 }
-            }, 30000);
+            }, 10000);
         });
     </script>
 </body>
